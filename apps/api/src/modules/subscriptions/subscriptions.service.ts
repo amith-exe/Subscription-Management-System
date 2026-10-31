@@ -159,7 +159,7 @@ export class SubscriptionsService {
           customer: true,
           plan: true,
           lines: {
-            include: { product: true, variant: true },
+            include: { product: true, variant: true, tax: true },
           },
         },
       });
@@ -212,7 +212,7 @@ export class SubscriptionsService {
           customer: true,
           plan: true,
           lines: {
-            include: { product: true, variant: true },
+            include: { product: true, variant: true, tax: true },
           },
         },
       });
@@ -245,7 +245,7 @@ export class SubscriptionsService {
           customer: true,
           plan: true,
           lines: {
-            include: { product: true, variant: true },
+            include: { product: true, variant: true, tax: true },
           },
         },
       }),
@@ -262,7 +262,7 @@ export class SubscriptionsService {
         customer: true,
         plan: true,
         lines: {
-          include: { product: true, variant: true },
+          include: { product: true, variant: true, tax: true },
         },
         invoices: {
           orderBy: { createdAt: 'desc' },
@@ -317,7 +317,7 @@ export class SubscriptionsService {
           customer: true,
           plan: true,
           lines: {
-            include: { product: true, variant: true },
+            include: { product: true, variant: true, tax: true },
           },
         },
       });
@@ -413,7 +413,7 @@ export class SubscriptionsService {
         customer: true,
         plan: true,
         lines: {
-          include: { product: true, variant: true },
+          include: { product: true, variant: true, tax: true },
         },
       },
       take: limit,
