@@ -107,7 +107,7 @@ export default function LoginPage() {
               if (payload.role) resolvedRole = payload.role;
               if (payload.customerId) customerId = payload.customerId;
               userName = payload.email.split('@')[0];
-            } catch {}
+            } catch { }
           }
         } else if (!forceRole) {
           const errData = await response.json().catch(() => ({}));
@@ -145,10 +145,10 @@ export default function LoginPage() {
         userName !== 'User'
           ? userName
           : resolvedRole === 'ADMIN'
-          ? 'System Administrator'
-          : resolvedRole === 'INTERNAL'
-          ? 'Operations Staff Lead'
-          : 'Acme Corporation';
+            ? 'System Administrator'
+            : resolvedRole === 'INTERNAL'
+              ? 'Operations Staff Lead'
+              : 'Acme Corporation';
 
       if (resolvedRole === 'CUSTOMER' && !customerId) {
         customerId = 'cust-acme-001';
@@ -213,26 +213,39 @@ export default function LoginPage() {
   };
 
   const handleGoogleAuth = () => {
-    // Check if backend API is reachable for full OAuth redirect
-    const googleAuthUrl = `${API_URL}/auth/google`;
-    
-    // For local evaluation or fallback:
-    // If user clicks Google, we authenticate as Google Customer tier
-    if (testMode) {
-      localStorage.setItem(
-        'brightloop_user',
-        JSON.stringify({
-          email: 'alex.chen@googlemail.com',
-          role: 'CUSTOMER',
-          name: 'Alex Chen (Google Account)',
-          customerId: 'cust-google-001',
-          token: 'google-oauth-demo-token',
-        })
-      );
-      router.push('/portal');
-    } else {
-      window.location.href = googleAuthUrl;
+    const clientId =
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+      '155057581026-7h6orq3jta9rqi0g770dud9nhq2ig5g9.apps.googleusercontent.com';
+    const callbackUrl =
+      process.env.NEXT_PUBLIC_GOOGLE_CALLBACK_URL ||
+      (typeof window !== 'undefined' ? `${window.location.origin}/auth/google/callback` : 'http://localhost:3000/auth/google/callback');
+
+    if (!testMode && clientId) {
+      // Direct authentic Google OAuth 2.0 authorization endpoint
+      const googleOAuthUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}&` +
+        `redirect_uri=${encodeURIComponent(callbackUrl)}&` +
+        `response_type=token%20id_token&` +
+        `scope=openid%20email%20profile&` +
+        `nonce=${Math.random().toString(36).substring(2)}`;
+
+      window.location.href = googleOAuthUrl;
+      return;
     }
+
+    // Test mode 1-click evaluation profile
+    localStorage.setItem(
+      'brightloop_user',
+      JSON.stringify({
+        email: 'alex.chen@gmail.com',
+        role: 'CUSTOMER',
+        name: 'Alex Chen (Google Account)',
+        customerId: 'cust-google-001',
+        token: 'google-oauth-demo-token',
+      })
+    );
+    router.push('/portal');
   };
 
   const handleSelectTestProfile = (profile: (typeof TEST_PROFILES)[number]) => {
@@ -265,9 +278,8 @@ export default function LoginPage() {
                   setError(null);
                   setSuccess(null);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  tab === 'signin' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-600 hover:text-stone-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${tab === 'signin' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-600 hover:text-stone-900'
+                  }`}
               >
                 Sign In
               </button>
@@ -278,9 +290,8 @@ export default function LoginPage() {
                   setError(null);
                   setSuccess(null);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  tab === 'signup' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-600 hover:text-stone-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${tab === 'signup' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-600 hover:text-stone-900'
+                  }`}
               >
                 Sign Up
               </button>
@@ -293,11 +304,10 @@ export default function LoginPage() {
                 setTestMode(!testMode);
                 setError(null);
               }}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold transition-all cursor-pointer border ${
-                testMode
-                  ? 'bg-amber-100 text-amber-900 border-amber-300 shadow-sm'
-                  : 'bg-stone-100 text-stone-600 border-stone-300 hover:bg-stone-200'
-              }`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold transition-all cursor-pointer border ${testMode
+                ? 'bg-amber-100 text-amber-900 border-amber-300 shadow-sm'
+                : 'bg-stone-100 text-stone-600 border-stone-300 hover:bg-stone-200'
+                }`}
               title="Toggle dummy credentials for hackathon test evaluation"
             >
               <FlaskConical className="w-3 h-3 text-amber-700" />
@@ -327,7 +337,7 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl bg-white hover:bg-stone-50 border-2 border-stone-300 text-stone-800 text-xs font-semibold shadow-sm transition-all cursor-pointer hover:border-stone-400"
             >
               {/* Google 4-Color SVG Icon */}
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <svg className="w-4.5 h-4.5 shrink-0" width="18" height="18" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

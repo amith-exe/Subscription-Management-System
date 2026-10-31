@@ -18,6 +18,32 @@ export default function GoogleCallbackPage() {
       const token = params.get('token') || params.get('accessToken');
       const code = params.get('code');
 
+      // Check URL hash for Google OAuth implicit flow
+      const hash = window.location.hash ? window.location.hash.substring(1) : '';
+      const hashParams = new URLSearchParams(hash);
+      const idToken = hashParams.get('id_token') || hashParams.get('access_token');
+
+      if (idToken) {
+        try {
+          const base64Url = idToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
+
+          localStorage.setItem(
+            'brightloop_user',
+            JSON.stringify({
+              email: payload.email || 'google.user@example.com',
+              role: 'CUSTOMER',
+              name: payload.name || payload.email?.split('@')[0] || 'Google User',
+              customerId: 'cust-google-001',
+              token: idToken,
+            })
+          );
+          router.push('/portal');
+          return;
+        } catch {}
+      }
+
       if (token) {
         // Direct token callback
         try {
@@ -122,3 +148,4 @@ export default function GoogleCallbackPage() {
     </div>
   );
 }
+
