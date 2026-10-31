@@ -11,8 +11,7 @@
     "test": "npm run test --workspaces",
     "db:generate": "npm run prisma:generate --workspace @subscription/api",
     "db:migrate": "npm run prisma:migrate --workspace @subscription/api",
-    "db:seed": "npm run prisma:seed --workspace @subscription/api",
-    "db:studio": "npm run prisma:studio --workspace @subscription/api"
+    "db:seed": "npm run prisma:seed --workspace @subscription/api"
   },
   "engines": { "node": ">=20" }
 }

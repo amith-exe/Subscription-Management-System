@@ -22,7 +22,7 @@ import { MustChangePasswordGuard } from './common/auth/must-change-password.guar
 import { RolesGuard } from './common/auth/roles.guard';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['apps/api/.env', '.env'], validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
   providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard],
   exports: [PrismaService],
 })
