@@ -130,17 +130,17 @@ export class PaymentsService {
     if (!invoice || !user.customerId || invoice.customerId !== user.customerId) {
       throw new NotFoundException('Invoice not found');
     }
-    if (invoice.status !== InvoiceStatus.CONFIRMED && invoice.status !== InvoiceStatus.OVERDUE) {
-      throw new BadRequestException('Only confirmed, unpaid invoices can be paid online');
-    }
-
+    const isPayable = invoice.status === InvoiceStatus.CONFIRMED || invoice.status === InvoiceStatus.OVERDUE;
     const outstanding = invoice.total.minus(invoice.amountPaid);
-    if (outstanding.lte(0)) throw new BadRequestException('Invoice has no outstanding balance');
-
     const existing = await this.prisma.paymentAttempt.findFirst({
       where: { invoiceId, status: PaymentAttemptStatus.CREATED },
     });
-    if (existing) return this.checkoutOrder(existing.providerOrderId, existing.amount, existing.currency, invoice.customer.name, invoice.customer.user.email);
+    if (existing && (!isPayable || outstanding.lte(0) || !existing.amount.eq(outstanding))) {
+      await this.prisma.paymentAttempt.updateMany({ where: { id: existing.id, status: PaymentAttemptStatus.CREATED }, data: { status: PaymentAttemptStatus.FAILED } });
+    }
+    if (!isPayable) throw new BadRequestException('Only confirmed, unpaid invoices can be paid online');
+    if (outstanding.lte(0)) throw new BadRequestException('Invoice has no outstanding balance');
+    if (existing?.amount.eq(outstanding)) return this.checkoutOrder(existing.providerOrderId, existing.amount, existing.currency, invoice.customer.name, invoice.customer.user.email);
 
     const amountPaise = Math.round(Number(outstanding.toFixed(2)) * 100);
     if (!Number.isSafeInteger(amountPaise) || amountPaise < 1) {
@@ -183,6 +183,8 @@ export class PaymentsService {
     if (!attempt || !user.customerId || attempt.invoice.customerId !== user.customerId) {
       throw new NotFoundException('Payment order not found');
     }
+    if (attempt.status === PaymentAttemptStatus.FAILED) throw new ConflictException('This payment order is no longer active');
+    if (attempt.status === PaymentAttemptStatus.PAID && attempt.paymentId !== input.razorpay_payment_id) throw new ConflictException('This payment order was recorded with a different payment');
 
     const expected = createHmac('sha256', this.keySecret())
       .update(`${input.razorpay_order_id}|${input.razorpay_payment_id}`)

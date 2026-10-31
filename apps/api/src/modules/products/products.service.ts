@@ -79,8 +79,15 @@ export class ProductsService {
   }
 
   async removeVariant(productId: string, variantId: string) {
-    return this.prisma.productVariant.delete({
+    await this.findOne(productId);
+    const variant = await this.prisma.productVariant.findFirst({
       where: { id: variantId, productId },
+    });
+    if (!variant) {
+      throw new NotFoundException(`Variant "${variantId}" not found on product "${productId}"`);
+    }
+    return this.prisma.productVariant.delete({
+      where: { id: variantId },
     });
   }
 

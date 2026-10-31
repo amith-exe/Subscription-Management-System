@@ -9,7 +9,6 @@ import {
   Subscription,
   SubscriptionStatus,
 } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { TaxesService } from '../taxes/taxes.service';
@@ -79,8 +78,8 @@ export class SubscriptionsService {
       );
       const subtotal = unitPrice.mul(line.quantity).toDecimalPlaces(2);
 
-      let taxRate = new Decimal(0);
-      let taxAmount = new Decimal(0);
+      let taxRate = new Prisma.Decimal(0);
+      let taxAmount = new Prisma.Decimal(0);
 
       if (line.taxId) {
         const taxResult = await this.taxesService.calculate(
@@ -449,12 +448,24 @@ export class SubscriptionsService {
       case BillingPeriod.WEEKLY:
         nextDate.setDate(nextDate.getDate() + 7);
         break;
-      case BillingPeriod.MONTHLY:
+      case BillingPeriod.MONTHLY: {
+        const anchorDay = sub.startDate.getDate();
+        nextDate.setDate(1);
         nextDate.setMonth(nextDate.getMonth() + 1);
+        const lastDay = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+        nextDate.setDate(Math.min(anchorDay, lastDay));
         break;
-      case BillingPeriod.YEARLY:
+      }
+      case BillingPeriod.YEARLY: {
+        const anchorDay = sub.startDate.getDate();
+        const anchorMonth = sub.startDate.getMonth();
+        nextDate.setDate(1);
         nextDate.setFullYear(nextDate.getFullYear() + 1);
+        nextDate.setMonth(anchorMonth);
+        const lastDay = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+        nextDate.setDate(Math.min(anchorDay, lastDay));
         break;
+      }
     }
 
     await client.subscription.update({

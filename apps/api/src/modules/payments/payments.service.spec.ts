@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { InvoiceStatus, PaymentMethod } from '@prisma/client';
+import { InvoiceStatus, PaymentAttemptStatus, PaymentMethod } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PaymentsService } from './payments.service';
 
@@ -37,7 +37,7 @@ describe('PaymentsService', () => {
         count: jest.fn(),
       },
     };
-    service = new PaymentsService(prisma, { get: jest.fn() } as any);
+    service = new PaymentsService(prisma, { get: jest.fn((key: string) => key === 'RAZORPAY_KEY_ID' ? 'rzp_test_key' : 'rzp_test_secret') } as any);
   });
 
   const paymentInput = (amount: number) => ({
@@ -125,5 +125,23 @@ describe('PaymentsService', () => {
     prisma.invoice.findUnique.mockResolvedValue(null);
 
     await expect(service.forInvoice(invoiceId, { page: 1, pageSize: 20 })).rejects.toThrow(NotFoundException);
+  });
+
+  it('retires a Razorpay order when the invoice balance changed and uses the current balance', async () => {
+    const customer = { name: 'Jane', user: { email: 'jane@example.com' } };
+    prisma.invoice.findUnique.mockResolvedValue({ ...invoice, customerId: 'customer-1', customer });
+    prisma.paymentAttempt = {
+      findFirst: jest.fn().mockResolvedValue({ id: 'old-attempt', providerOrderId: 'order_old', amount: new Prisma.Decimal(100), currency: 'INR' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      create: jest.fn().mockResolvedValue({ providerOrderId: 'order_new', amount: new Prisma.Decimal(75), currency: 'INR' }),
+    };
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id: 'order_new', amount: 7500, currency: 'INR', status: 'created' }), { status: 200 }));
+    try {
+      const result = await service.createOrder({ id: 'user-1', customerId: 'customer-1' } as any, invoiceId);
+      expect(prisma.paymentAttempt.updateMany).toHaveBeenCalledWith({ where: { id: 'old-attempt', status: PaymentAttemptStatus.CREATED }, data: { status: PaymentAttemptStatus.FAILED } });
+      expect(result).toEqual(expect.objectContaining({ orderId: 'order_new', amount: 7500 }));
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
