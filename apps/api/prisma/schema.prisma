@@ -7,14 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { ADMIN INTERNAL CUSTOMER }
-enum BillingPeriod { DAILY WEEKLY MONTHLY YEARLY }
-enum SubscriptionStatus { DRAFT QUOTATION CONFIRMED ACTIVE CLOSED }
-enum InvoiceStatus { DRAFT CONFIRMED PAID CANCELLED OVERDUE }
-enum TaxType { PERCENTAGE FIXED }
-enum DiscountType { FIXED PERCENT }
-enum DiscountScope { PRODUCT SUBSCRIPTION }
-enum PaymentMethod { CASH CARD BANK_TRANSFER OTHER }
+enum Role {
+  ADMIN
+  INTERNAL
+  CUSTOMER
+}
+
+enum BillingPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  DRAFT
+  QUOTATION
+  CONFIRMED
+  ACTIVE
+  CLOSED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+  CANCELLED
+  OVERDUE
+}
+
+enum TaxType {
+  PERCENTAGE
+  FIXED
+}
+
+enum DiscountType {
+  FIXED
+  PERCENT
+}
+
+enum DiscountScope {
+  PRODUCT
+  SUBSCRIPTION
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  OTHER
+}
 
 model User {
   id           String     @id @default(uuid())
@@ -51,6 +93,7 @@ model Product {
   costPrice   Decimal          @db.Decimal(19, 4)
   notes       String?
   variants    ProductVariant[]
+  quotationLines QuotationTemplateLine[]
   lines       SubscriptionLine[]
   invoiceLines InvoiceLine[]
   discountProducts DiscountProduct[]
