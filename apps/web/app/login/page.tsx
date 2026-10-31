@@ -213,26 +213,39 @@ export default function LoginPage() {
   };
 
   const handleGoogleAuth = () => {
-    // Check if backend API is reachable for full OAuth redirect
-    const googleAuthUrl = `${API_URL}/auth/google`;
-    
-    // For local evaluation or fallback:
-    // If user clicks Google, we authenticate as Google Customer tier
-    if (testMode) {
-      localStorage.setItem(
-        'brightloop_user',
-        JSON.stringify({
-          email: 'alex.chen@googlemail.com',
-          role: 'CUSTOMER',
-          name: 'Alex Chen (Google Account)',
-          customerId: 'cust-google-001',
-          token: 'google-oauth-demo-token',
-        })
-      );
-      router.push('/portal');
-    } else {
-      window.location.href = googleAuthUrl;
+    const clientId =
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+      '155057581026-7h6orq3jta9rqi0g770dud9nhq2ig5g9.apps.googleusercontent.com';
+    const callbackUrl =
+      process.env.NEXT_PUBLIC_GOOGLE_CALLBACK_URL ||
+      (typeof window !== 'undefined' ? `${window.location.origin}/auth/google/callback` : 'http://localhost:3000/auth/google/callback');
+
+    if (!testMode && clientId) {
+      // Direct authentic Google OAuth 2.0 authorization endpoint
+      const googleOAuthUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}&` +
+        `redirect_uri=${encodeURIComponent(callbackUrl)}&` +
+        `response_type=token%20id_token&` +
+        `scope=openid%20email%20profile&` +
+        `nonce=${Math.random().toString(36).substring(2)}`;
+
+      window.location.href = googleOAuthUrl;
+      return;
     }
+
+    // Test mode 1-click evaluation profile
+    localStorage.setItem(
+      'brightloop_user',
+      JSON.stringify({
+        email: 'alex.chen@gmail.com',
+        role: 'CUSTOMER',
+        name: 'Alex Chen (Google Account)',
+        customerId: 'cust-google-001',
+        token: 'google-oauth-demo-token',
+      })
+    );
+    router.push('/portal');
   };
 
   const handleSelectTestProfile = (profile: (typeof TEST_PROFILES)[number]) => {
