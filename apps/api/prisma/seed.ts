@@ -3,7 +3,7 @@ import { PrismaClient, Role, BillingPeriod, SubscriptionStatus, InvoiceStatus, T
 const prisma = new PrismaClient();
 
 // Pre-computed Argon2id hash for "Password123!"
-const DEFAULT_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$2q1B5Y3l+fN3N3J6/4qXnA$6b6P9B5JkL7l+yR6c6J3d5T1y9m0K1L2a3B4c5D6e7F';
+const DEFAULT_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$3n+ErdT9J97Sij1ZDHCNBg$KnsJdEIa0qOYX6saamoCbtQczQwWtoW90ypHDlVhVWM';
 
 async function main() {
   console.log('Seeding Subscription Management System database...');
@@ -22,53 +22,59 @@ async function main() {
   });
 
   // 2. Users (Admin, Staff/Internal, Customers)
+  const now = new Date();
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@brightloop.io' },
-    update: {},
+    update: { passwordHash: DEFAULT_PASSWORD_HASH, emailVerifiedAt: now },
     create: {
       email: 'admin@brightloop.io',
       passwordHash: DEFAULT_PASSWORD_HASH,
       role: Role.ADMIN,
+      emailVerifiedAt: now,
     },
   });
 
   const staffUser = await prisma.user.upsert({
     where: { email: 'staff@brightloop.io' },
-    update: {},
+    update: { passwordHash: DEFAULT_PASSWORD_HASH, emailVerifiedAt: now },
     create: {
       email: 'staff@brightloop.io',
       passwordHash: DEFAULT_PASSWORD_HASH,
       role: Role.INTERNAL,
+      emailVerifiedAt: now,
     },
   });
 
   const cust1User = await prisma.user.upsert({
     where: { email: 'billing@acme.com' },
-    update: {},
+    update: { passwordHash: DEFAULT_PASSWORD_HASH, emailVerifiedAt: now },
     create: {
       email: 'billing@acme.com',
       passwordHash: DEFAULT_PASSWORD_HASH,
       role: Role.CUSTOMER,
+      emailVerifiedAt: now,
     },
   });
 
   const cust2User = await prisma.user.upsert({
     where: { email: 'finance@globex.com' },
-    update: {},
+    update: { passwordHash: DEFAULT_PASSWORD_HASH, emailVerifiedAt: now },
     create: {
       email: 'finance@globex.com',
       passwordHash: DEFAULT_PASSWORD_HASH,
       role: Role.CUSTOMER,
+      emailVerifiedAt: now,
     },
   });
 
   const cust3User = await prisma.user.upsert({
     where: { email: 'ops@initech.com' },
-    update: {},
+    update: { passwordHash: DEFAULT_PASSWORD_HASH, emailVerifiedAt: now },
     create: {
       email: 'ops@initech.com',
       passwordHash: DEFAULT_PASSWORD_HASH,
       role: Role.CUSTOMER,
+      emailVerifiedAt: now,
     },
   });
 
