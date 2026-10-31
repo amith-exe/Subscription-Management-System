@@ -6,6 +6,14 @@ When the API is running with `SWAGGER_ENABLED=true` in development, Swagger UI i
 
 A modular-monolith subscription and billing platform built with NestJS, Prisma, PostgreSQL, Redis/BullMQ, and Next.js.
 
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Database design](docs/database-design.md)
+- [Use cases](docs/use-cases.md)
+- [Developer and reviewer guide](docs/developer-and-reviewer-guide.md)
+- [Authentication manual tests](docs/auth-manual-tests.md)
+
 ## Workspace layout
 
 - `apps/api`: NestJS API, domain modules, billing jobs, Prisma schema
