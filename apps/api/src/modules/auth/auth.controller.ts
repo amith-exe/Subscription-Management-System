@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -17,9 +18,9 @@ class LoginResponse extends AuthTokensResponse { @ApiProperty({ description: 'Wh
 @Throttle({ default: { limit: 5, ttl: 60000 } })
 @Controller('auth')
 export class AuthController {
-  public constructor(private readonly auth: AuthService) {}
+  public constructor(private readonly auth: AuthService, private readonly config: ConfigService) {}
   @Get('google') @Public() @UseGuards(GoogleAuthGuard) @ApiOperation({ summary: 'Start Google OAuth login' }) @ApiResponse({ status: 302, description: 'Redirects to Google consent' }) public google(): void {}
-  @Get('google/callback') @Public() @UseGuards(GoogleAuthGuard) @ApiOperation({ summary: 'Complete Google OAuth login and set the refresh cookie' }) @ApiResponse({ status: 200, type: AuthTokensResponse }) @ApiResponse({ status: 401, description: 'Google account could not be authenticated' }) public async googleCallback(@Req() req: Request & { user: GoogleProfilePayload }, @Res({ passthrough: true }) res: Response): Promise<AuthTokensResponse> { return this.auth.googleLogin(req.user, res); }
+  @Get('google/callback') @Public() @UseGuards(GoogleAuthGuard) @ApiOperation({ summary: 'Complete Google OAuth login and redirect to the web app' }) @ApiResponse({ status: 302, description: 'Redirects to the web callback after creating the app session' }) @ApiResponse({ status: 401, description: 'Google account could not be authenticated' }) public async googleCallback(@Req() req: Request & { user: GoogleProfilePayload }, @Res() res: Response): Promise<void> { await this.auth.googleLogin(req.user, res); res.redirect(302, `${this.config.getOrThrow<string>('WEB_URL')}/auth/google/callback`); }
   @Post('signup') @Public() @ApiOperation({ summary: 'Create a customer account' }) @ApiResponse({ status: 201, type: MessageResponse }) @ApiResponse({ status: 409, description: 'Email already exists' }) public async signup(@Body() dto: SignupDto, @Req() req: Request): Promise<MessageResponse> { return this.auth.signup(dto, req.ip); }
   @Post('verify-email') @Public() @ApiOperation({ summary: 'Verify email with OTP' }) @ApiResponse({ status: 200, type: MessageResponse }) @ApiResponse({ status: 400, description: 'Invalid, expired, or exhausted OTP' }) public async verify(@Body() dto: VerifyEmailDto): Promise<MessageResponse> { return this.auth.verifyEmail(dto); }
   @Post('resend-otp') @Public() @ApiOperation({ summary: 'Resend verification OTP' }) @ApiResponse({ status: 200, type: MessageResponse }) public async resend(@Body() dto: ResendOtpDto): Promise<MessageResponse> { return this.auth.resendOtp(dto); }

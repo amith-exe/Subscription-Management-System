@@ -382,7 +382,8 @@ export default function CustomerPortalPage() {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (!res.ok) throw new Error('Subscription cancellation is not available through the API yet.');
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(Array.isArray(result.message) ? result.message.join(', ') : result.message || 'Subscription cancellation was rejected by the API.');
       triggerToast(`Subscription ${cancelModalSub.number} successfully cancelled.`);
       await fetchPortalData(accessToken);
     } catch (error) {
@@ -446,7 +447,6 @@ export default function CustomerPortalPage() {
               <ShieldCheck className="w-4 h-4 text-emerald-700" />
               Tenant Data Isolated
             </span>
-            <button onClick={() => void handleSignOut()} className="px-3 py-2 rounded-xl bg-white border-2 border-stone-900/15 text-xs font-semibold">Sign out</button>
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 text-xs font-semibold border-2 border-stone-900/15 transition-all"

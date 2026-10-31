@@ -33,7 +33,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       firstName: profile.name?.givenName ?? '',
       lastName: profile.name?.familyName ?? '',
       googleId: profile.id,
-      emailVerified: profile._json.email_verified === true,
+      emailVerified: profile._json?.email_verified === true,
     };
   }
 }

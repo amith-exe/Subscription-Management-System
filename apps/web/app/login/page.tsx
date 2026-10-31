@@ -63,7 +63,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [testMode, setTestMode] = useState(true);
+  const [testMode, setTestMode] = useState(false);
 
   const performLogin = async (
     loginEmail: string,
@@ -76,6 +76,7 @@ export default function LoginPage() {
     setSuccess(null);
 
     try {
+      const allowDemoFallback = testMode && Boolean(forceRole);
       let resolvedRole: 'ADMIN' | 'INTERNAL' | 'CUSTOMER' = forceRole || 'CUSTOMER';
       let token = '';
       let customerId: string | null = null;
@@ -109,20 +110,12 @@ export default function LoginPage() {
               userName = payload.email.split('@')[0];
             } catch { }
           }
-        } else if (!forceRole) {
+        } else if (!allowDemoFallback) {
           const errData = await response.json().catch(() => ({}));
-          const matchingTest = TEST_PROFILES.find(
-            (p) => p.email.toLowerCase() === loginEmail.trim().toLowerCase()
-          );
-          if (!matchingTest) {
-            throw new Error(errData.message || 'Invalid email or password.');
-          }
+          throw new Error(errData.message || 'Invalid email or password.');
         }
       } catch (networkErr: any) {
-        const matchingTest = TEST_PROFILES.find(
-          (p) => p.email.toLowerCase() === loginEmail.trim().toLowerCase()
-        );
-        if (!matchingTest && !forceRole) {
+        if (!allowDemoFallback) {
           throw networkErr;
         }
       }
@@ -213,24 +206,8 @@ export default function LoginPage() {
   };
 
   const handleGoogleAuth = () => {
-    const clientId =
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
-      '155057581026-7h6orq3jta9rqi0g770dud9nhq2ig5g9.apps.googleusercontent.com';
-    const callbackUrl =
-      process.env.NEXT_PUBLIC_GOOGLE_CALLBACK_URL ||
-      (typeof window !== 'undefined' ? `${window.location.origin}/auth/google/callback` : 'http://localhost:3000/auth/google/callback');
-
-    if (!testMode && clientId) {
-      // Direct authentic Google OAuth 2.0 authorization endpoint
-      const googleOAuthUrl =
-        `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(clientId)}&` +
-        `redirect_uri=${encodeURIComponent(callbackUrl)}&` +
-        `response_type=token%20id_token&` +
-        `scope=openid%20email%20profile&` +
-        `nonce=${Math.random().toString(36).substring(2)}`;
-
-      window.location.href = googleOAuthUrl;
+    if (!testMode) {
+      window.location.href = `${API_URL}/auth/google`;
       return;
     }
 

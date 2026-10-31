@@ -355,6 +355,16 @@ export default function HomePage() {
   const [paymentRef, setPaymentRef] = useState('UPI-99481023');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [apiConnected, setApiConnected] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [taxes, setTaxes] = useState<any[]>([]);
+  const [discounts, setDiscounts] = useState<any[]>([]);
+  const [productForm, setProductForm] = useState({ name: '', type: 'software', salesPrice: '', costPrice: '', notes: '' });
+  const [variantForm, setVariantForm] = useState({ productId: '', attribute: 'Brand', value: '', extraPrice: '' });
+  const [planForm, setPlanForm] = useState({ name: '', price: '', billingPeriod: 'MONTHLY', minQuantity: '1', startDate: new Date().toISOString().slice(0, 10), endDate: '', autoClose: true, allowEarlyClose: false, allowPause: false, allowRenew: true });
+  const [taxForm, setTaxForm] = useState({ name: '', rate: '', type: 'PERCENTAGE' });
+  const [discountForm, setDiscountForm] = useState({ name: '', type: 'PERCENT', value: '', minPurchase: '', minQuantity: '', startDate: new Date().toISOString().slice(0, 10), endDate: '', usageLimit: '', appliesTo: 'SUBSCRIPTION' });
+  const [staffForm, setStaffForm] = useState({ name: '', email: '' });
 
   useEffect(() => {
     if (!currentUser?.token) return;
@@ -401,6 +411,20 @@ export default function HomePage() {
           lineDescription: invoice.lines?.[0]?.description || 'Invoice', qty: invoice.lines?.[0]?.quantity || 0, unitPrice: Number(invoice.lines?.[0]?.unitPrice || 0), paymentNote: invoice.amountPaid ? 'Payment recorded' : 'Outstanding',
         })));
         setApiConnected(true);
+        if (currentUser.role === 'ADMIN') {
+          const adminResponses = await Promise.all([
+            fetch(`${API_URL}/products?page=1&limit=100`, { headers, cache: 'no-store' }),
+            fetch(`${API_URL}/plans`, { headers, cache: 'no-store' }),
+            fetch(`${API_URL}/taxes`, { headers, cache: 'no-store' }),
+            fetch(`${API_URL}/discounts`, { headers, cache: 'no-store' }),
+          ]);
+          if (adminResponses.some((response) => !response.ok)) throw new Error('Admin configuration could not be loaded');
+          const [productPayload, planPayload, taxPayload, discountPayload] = await Promise.all(adminResponses.map((response) => response.json()));
+          setProducts(productPayload.data || productPayload);
+          setPlans(planPayload.data || planPayload);
+          setTaxes(taxPayload.data || taxPayload);
+          setDiscounts(discountPayload.data || discountPayload);
+        }
       } catch {
         setApiConnected(false);
         triggerToast('Live operations data is unavailable. Showing the last loaded workspace data.');
@@ -449,6 +473,19 @@ export default function HomePage() {
     triggerToast(`Transitioned ${subscription.number}: ${subscription.status} → ${nextStatus}`);
   };
 
+  const handleInternalCloseSubscription = async (id: string, number: string) => {
+    if (!currentUser?.token) return;
+    try {
+      const response = await fetch(`${API_URL}/subscriptions/${id}/close`, { method: 'POST', headers: { Authorization: `Bearer ${currentUser.token}` } });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(Array.isArray(result.message) ? result.message.join(', ') : result.message || 'Subscription cancellation was rejected by the API.');
+      setSubscriptions((items) => items.map((item) => item.id === id ? { ...item, status: 'CLOSED' } : item));
+      triggerToast(`Subscription ${number} successfully cancelled.`);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not cancel this subscription.');
+    }
+  };
+
   const handleOpenPaymentModal = (inv: any) => {
     const remaining = Math.max(0, inv.total - inv.paid);
     setPaymentModalInvoice(inv);
@@ -479,6 +516,48 @@ export default function HomePage() {
     );
     triggerToast(`Logged ${formatINR(paidInput)} (${paymentMethod}) for ${paymentModalInvoice.number}`);
     setPaymentModalInvoice(null);
+  };
+
+  const adminRequest = async (path: string, method: string, body: unknown) => {
+    if (!currentUser?.token) throw new Error('Your session has expired. Please sign in again.');
+    const response = await fetch(`${API_URL}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token}` }, body: JSON.stringify(body) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(Array.isArray(result.message) ? result.message.join(', ') : result.message || 'The API rejected this change.');
+    return result;
+  };
+
+  const handleCreateProduct = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try { const product = await adminRequest('/products', 'POST', { ...productForm, isActive: true }); setProducts((items) => [product, ...items]); setProductForm({ name: '', type: 'software', salesPrice: '', costPrice: '', notes: '' }); triggerToast('Product created.'); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Product creation failed.'); }
+  };
+
+  const handleAddVariant = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try { const product = await adminRequest(`/products/${variantForm.productId}/variants`, 'POST', { attribute: variantForm.attribute, value: variantForm.value, extraPrice: variantForm.extraPrice }); setProducts((items) => items.map((item) => item.id === product.id ? product : item)); setVariantForm({ productId: '', attribute: 'Brand', value: '', extraPrice: '' }); triggerToast('Product variant added.'); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Variant creation failed.'); }
+  };
+
+  const handleCreatePlan = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try { const plan = await adminRequest('/plans', 'POST', { ...planForm, minQuantity: Number(planForm.minQuantity), endDate: planForm.endDate || undefined, startDate: new Date(planForm.startDate).toISOString() }); setPlans((items) => [plan, ...items]); triggerToast('Plan created.'); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Plan creation failed.'); }
+  };
+
+  const handleUpdatePlanPolicy = async (plan: any, field: 'autoClose' | 'allowEarlyClose' | 'allowPause' | 'allowRenew') => {
+    try { const updated = await adminRequest(`/plans/${plan.id}`, 'PATCH', { [field]: !plan[field] }); setPlans((items) => items.map((item) => item.id === updated.id ? updated : item)); triggerToast(`${field} updated for ${plan.name}.`); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Plan policy update failed.'); }
+  };
+
+  const handleCreateTax = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try { const tax = await adminRequest('/taxes', 'POST', taxForm); setTaxes((items) => [tax, ...items]); setTaxForm({ name: '', rate: '', type: 'PERCENTAGE' }); triggerToast('Tax rule created.'); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Tax creation failed.'); }
+  };
+
+  const handleCreateDiscount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try { const discount = await adminRequest('/discounts', 'POST', { ...discountForm, minPurchase: discountForm.minPurchase || undefined, minQuantity: discountForm.minQuantity ? Number(discountForm.minQuantity) : undefined, usageLimit: discountForm.usageLimit ? Number(discountForm.usageLimit) : undefined, endDate: discountForm.endDate || undefined, startDate: new Date(discountForm.startDate).toISOString() }); setDiscounts((items) => [discount, ...items]); triggerToast('Discount rule created.'); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Discount creation failed.'); }
+  };
+
+  const handleCreateStaff = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try { await adminRequest('/users/staff', 'POST', staffForm); setStaffForm({ name: '', email: '' }); triggerToast('Staff account created and invitation sent.'); } catch (error) { triggerToast(error instanceof Error ? error.message : 'Staff creation failed.'); }
   };
 
   const basePrice = 500;
@@ -1088,129 +1167,47 @@ export default function HomePage() {
 
             {/* 3. ADMIN GOVERNANCE WORKSPACE */}
             {activePersona === 'ADMIN' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Variant Pricing Sandbox */}
-                <div className={`${BENTO.card} p-8 space-y-6`}>
-                  <div>
-                    <h3 className="text-lg font-bold text-stone-900">Product & Additive Variant Pricing</h3>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Formula: <code className="font-mono">Unit Price = salesPrice + extraPrice</code>
-                    </p>
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                  <div className={`${BENTO.card} p-7 space-y-5`}>
+                    <div><h3 className="text-lg font-bold">Products and variants</h3><p className="text-xs text-stone-500 mt-1">Create catalog records and persist variant price add-ons.</p></div>
+                    <form onSubmit={handleCreateProduct} className="grid grid-cols-2 gap-3">
+                      <input required placeholder="Product name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} className={BENTO.input} />
+                      <select value={productForm.type} onChange={(e) => setProductForm({ ...productForm, type: e.target.value })} className={BENTO.input}><option value="software">Software</option><option value="addon">Add-on</option><option value="service">Service</option></select>
+                      <input required placeholder="Sales price" value={productForm.salesPrice} onChange={(e) => setProductForm({ ...productForm, salesPrice: e.target.value })} className={BENTO.input} />
+                      <input required placeholder="Cost price" value={productForm.costPrice} onChange={(e) => setProductForm({ ...productForm, costPrice: e.target.value })} className={BENTO.input} />
+                      <input placeholder="Notes" value={productForm.notes} onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })} className={`${BENTO.input} col-span-2`} />
+                      <button className={`${BENTO.primaryBtn} col-span-2`} type="submit">Create Product</button>
+                    </form>
+                    <form onSubmit={handleAddVariant} className="grid grid-cols-2 gap-3 border-t border-stone-200 pt-5">
+                      <select required value={variantForm.productId} onChange={(e) => setVariantForm({ ...variantForm, productId: e.target.value })} className={`${BENTO.input} col-span-2`}><option value="">Select product for variant</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
+                      <input required placeholder="Attribute" value={variantForm.attribute} onChange={(e) => setVariantForm({ ...variantForm, attribute: e.target.value })} className={BENTO.input} />
+                      <input required placeholder="Value" value={variantForm.value} onChange={(e) => setVariantForm({ ...variantForm, value: e.target.value })} className={BENTO.input} />
+                      <input required placeholder="Extra price" value={variantForm.extraPrice} onChange={(e) => setVariantForm({ ...variantForm, extraPrice: e.target.value })} className={BENTO.input} />
+                      <button className={BENTO.secondaryBtn} type="submit">Add Variant</button>
+                    </form>
+                    <div className="space-y-2 max-h-48 overflow-auto">{products.map((product) => <div key={product.id} className="flex justify-between text-xs border-b border-stone-100 pb-2"><span className="font-semibold">{product.name}</span><span className="font-mono text-stone-500">{product.variants?.length || 0} variants · ₹{product.salesPrice}</span></div>)}</div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedVariant('odoo')}
-                      className={`p-5 rounded-xl border-2 text-left cursor-pointer transition-all ${
-                        selectedVariant === 'odoo'
-                          ? 'border-emerald-700 bg-emerald-50/70 shadow-[2px_2px_0px_rgba(4,120,87,0.2)]'
-                          : 'border-stone-900/15 bg-[#F4F3EF]/50 hover:border-stone-900/35'
-                      }`}
-                    >
-                      <span className="text-xs font-mono uppercase text-stone-500 font-semibold">Brand Variant</span>
-                      <p className="font-bold text-base mt-1 text-stone-900">Odoo Edition</p>
-                      <p className="font-mono text-xs text-emerald-700 font-bold mt-1">+₹560.00 extraPrice</p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedVariant('standard')}
-                      className={`p-5 rounded-xl border-2 text-left cursor-pointer transition-all ${
-                        selectedVariant === 'standard'
-                          ? 'border-emerald-700 bg-emerald-50/70 shadow-[2px_2px_0px_rgba(4,120,87,0.2)]'
-                          : 'border-stone-900/15 bg-[#F4F3EF]/50 hover:border-stone-900/35'
-                      }`}
-                    >
-                      <span className="text-xs font-mono uppercase text-stone-500 font-semibold">Brand Variant</span>
-                      <p className="font-bold text-base mt-1 text-stone-900">Standard Edition</p>
-                      <p className="font-mono text-xs text-stone-600 mt-1">+₹0.00 extraPrice</p>
-                    </button>
-                  </div>
-
-                  <div className="p-5 rounded-xl bg-[#F4F3EF] border-2 border-stone-900/15 space-y-2.5 font-mono text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-stone-600">Base Product (Brightloop ERP):</span>
-                      <span className="text-stone-900">{formatINR(basePrice)}</span>
-                    </div>
-                    <div className="flex justify-between text-emerald-700 font-bold">
-                      <span>Variant Add-on ({selectedVariant.toUpperCase()}):</span>
-                      <span>+{formatINR(extraPrice)}</span>
-                    </div>
-                    <div className="border-t border-stone-300 pt-2.5 flex justify-between text-sm font-bold text-stone-900">
-                      <span>Frozen Unit Price (Stored on Line):</span>
-                      <span>{formatINR(unitPrice)}</span>
-                    </div>
+                  <div className={`${BENTO.card} p-7 space-y-5`}>
+                    <div><h3 className="text-lg font-bold">Plans and lifecycle policies</h3><p className="text-xs text-stone-500 mt-1">Configure cadence, availability, auto-close, pause, renewal, and early closure.</p></div>
+                    <form onSubmit={handleCreatePlan} className="grid grid-cols-2 gap-3">
+                      <input required placeholder="Plan name" value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} className={`${BENTO.input} col-span-2`} />
+                      <input required placeholder="Price" value={planForm.price} onChange={(e) => setPlanForm({ ...planForm, price: e.target.value })} className={BENTO.input} />
+                      <select value={planForm.billingPeriod} onChange={(e) => setPlanForm({ ...planForm, billingPeriod: e.target.value })} className={BENTO.input}>{['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].map((period) => <option key={period}>{period}</option>)}</select>
+                      <input required type="number" min="1" placeholder="Minimum quantity" value={planForm.minQuantity} onChange={(e) => setPlanForm({ ...planForm, minQuantity: e.target.value })} className={BENTO.input} />
+                      <input required type="date" value={planForm.startDate} onChange={(e) => setPlanForm({ ...planForm, startDate: e.target.value })} className={BENTO.input} />
+                      <input type="date" value={planForm.endDate} onChange={(e) => setPlanForm({ ...planForm, endDate: e.target.value })} className={BENTO.input} />
+                      <button className={`${BENTO.primaryBtn} col-span-2`} type="submit">Create Plan</button>
+                    </form>
+                    <div className="space-y-3 max-h-64 overflow-auto">{plans.map((plan) => <div key={plan.id} className="p-3 rounded-lg bg-[#F4F3EF] border border-stone-200"><div className="flex justify-between"><span className="font-bold text-sm">{plan.name}</span><span className="font-mono text-xs">₹{plan.price} / {plan.billingPeriod}</span></div><div className="flex flex-wrap gap-2 mt-2">{(['autoClose', 'allowEarlyClose', 'allowPause', 'allowRenew'] as const).map((field) => <button key={field} type="button" onClick={() => void handleUpdatePlanPolicy(plan, field)} className={plan[field] ? 'text-[10px] px-2 py-1 rounded bg-emerald-100 text-emerald-800' : 'text-[10px] px-2 py-1 rounded bg-stone-200 text-stone-600'}>{field}: {plan[field] ? 'ON' : 'OFF'}</button>)}</div></div>)}</div>
                   </div>
                 </div>
 
-                {/* Plan Policy Flags */}
-                <div className={`${BENTO.card} p-8 space-y-6`}>
-                  <div>
-                    <h3 className="text-lg font-bold text-stone-900">Plan Governance Policies</h3>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Enforces subscription behavior across the lifecycle state machine
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="p-5 rounded-xl bg-[#F4F3EF] border-2 border-stone-900/15 flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-bold text-sm text-stone-900">allowEarlyClose</p>
-                        <p className="text-xs text-stone-600 mt-0.5">
-                          Allows customer to cancel contract before formal expiration date
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMonthlyAllowEarlyClose(!monthlyAllowEarlyClose);
-                          triggerToast(`Updated allowEarlyClose to ${!monthlyAllowEarlyClose}`);
-                        }}
-                        className={monthlyAllowEarlyClose ? BENTO.primaryBtn : BENTO.secondaryBtn}
-                      >
-                        {monthlyAllowEarlyClose ? 'ENABLED' : 'LOCKED'}
-                      </button>
-                    </div>
-
-                    <div className="p-5 rounded-xl bg-[#F4F3EF] border-2 border-stone-900/15 flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-bold text-sm text-stone-900">allowPause</p>
-                        <p className="text-xs text-stone-600 mt-0.5">
-                          Permits customer to pause billing cycles without cancelling
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAllowPausePlan(!allowPausePlan);
-                          triggerToast(`Updated allowPause to ${!allowPausePlan}`);
-                        }}
-                        className={allowPausePlan ? BENTO.primaryBtn : BENTO.secondaryBtn}
-                      >
-                        {allowPausePlan ? 'ENABLED' : 'LOCKED'}
-                      </button>
-                    </div>
-
-                    <div className="p-5 rounded-xl bg-[#F4F3EF] border-2 border-stone-900/15 flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-bold text-sm text-stone-900">autoClose</p>
-                        <p className="text-xs text-stone-600 mt-0.5">
-                          Automatically closes subscriptions when endDate is passed
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAutoClosePlan(!autoClosePlan);
-                          triggerToast(`Updated autoClose to ${!autoClosePlan}`);
-                        }}
-                        className={autoClosePlan ? BENTO.primaryBtn : BENTO.secondaryBtn}
-                      >
-                        {autoClosePlan ? 'ENABLED' : 'DISABLED'}
-                      </button>
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                  <div className={`${BENTO.card} p-7 space-y-4`}><h3 className="text-lg font-bold">Tax rules</h3><form onSubmit={handleCreateTax} className="space-y-3"><input required placeholder="Tax name" value={taxForm.name} onChange={(e) => setTaxForm({ ...taxForm, name: e.target.value })} className={`${BENTO.input} w-full`} /><input required placeholder="Rate" value={taxForm.rate} onChange={(e) => setTaxForm({ ...taxForm, rate: e.target.value })} className={`${BENTO.input} w-full`} /><select value={taxForm.type} onChange={(e) => setTaxForm({ ...taxForm, type: e.target.value })} className={`${BENTO.input} w-full`}><option>PERCENTAGE</option><option>FIXED</option></select><button className={`${BENTO.primaryBtn} w-full`} type="submit">Create Tax Rule</button></form><div className="space-y-2">{taxes.map((tax) => <div key={tax.id} className="text-xs flex justify-between"><span>{tax.name}</span><span className="font-mono">{tax.rate} {tax.type}</span></div>)}</div></div>
+                  <div className={`${BENTO.card} p-7 space-y-4`}><h3 className="text-lg font-bold">Discount rules</h3><form onSubmit={handleCreateDiscount} className="space-y-3"><input placeholder="Name" value={discountForm.name} onChange={(e) => setDiscountForm({ ...discountForm, name: e.target.value })} className={`${BENTO.input} w-full`} /><div className="grid grid-cols-2 gap-3"><select value={discountForm.type} onChange={(e) => setDiscountForm({ ...discountForm, type: e.target.value })} className={BENTO.input}><option>PERCENT</option><option>FIXED</option></select><input required placeholder="Value" value={discountForm.value} onChange={(e) => setDiscountForm({ ...discountForm, value: e.target.value })} className={BENTO.input} /></div><div className="grid grid-cols-2 gap-3"><input placeholder="Min purchase" value={discountForm.minPurchase} onChange={(e) => setDiscountForm({ ...discountForm, minPurchase: e.target.value })} className={BENTO.input} /><input type="number" min="1" placeholder="Min quantity" value={discountForm.minQuantity} onChange={(e) => setDiscountForm({ ...discountForm, minQuantity: e.target.value })} className={BENTO.input} /></div><div className="grid grid-cols-2 gap-3"><input required type="date" value={discountForm.startDate} onChange={(e) => setDiscountForm({ ...discountForm, startDate: e.target.value })} className={BENTO.input} /><input type="number" min="1" placeholder="Usage limit" value={discountForm.usageLimit} onChange={(e) => setDiscountForm({ ...discountForm, usageLimit: e.target.value })} className={BENTO.input} /></div><select value={discountForm.appliesTo} onChange={(e) => setDiscountForm({ ...discountForm, appliesTo: e.target.value })} className={`${BENTO.input} w-full`}><option>SUBSCRIPTION</option><option>PRODUCT</option></select><button className={`${BENTO.primaryBtn} w-full`} type="submit">Create Discount</button></form><div className="space-y-2 max-h-24 overflow-auto">{discounts.map((discount) => <div key={discount.id} className="text-xs flex justify-between"><span>{discount.name || 'Unnamed discount'}</span><span className="font-mono">{discount.value} {discount.type}</span></div>)}</div></div>
+                  <div className={`${BENTO.card} p-7 space-y-4`}><h3 className="text-lg font-bold">Staff access</h3><p className="text-xs text-stone-500">Only administrators can add internal team members.</p><form onSubmit={handleCreateStaff} className="space-y-3"><input required placeholder="Staff name" value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} className={`${BENTO.input} w-full`} /><input required type="email" placeholder="Staff email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} className={`${BENTO.input} w-full`} /><button className={`${BENTO.primaryBtn} w-full`} type="submit">Create Staff Account</button></form><div className="p-3 rounded-lg bg-emerald-50 text-emerald-800 text-xs">Invitation credentials are delivered by the API mail service.</div></div>
                 </div>
               </div>
             )}
@@ -1306,7 +1303,7 @@ export default function HomePage() {
                             {monthlyAllowEarlyClose ? (
                               <button
                                 type="button"
-                                onClick={() => triggerToast(`Cancellation requested for ${sub.number}`)}
+                                onClick={() => void handleInternalCloseSubscription(sub.id, sub.number)}
                                 className="px-4 py-2.5 rounded-xl text-xs font-semibold border-2 border-rose-500/50 text-rose-800 hover:bg-rose-50 cursor-pointer transition-colors"
                               >
                                 Cancel Plan

@@ -14,110 +14,23 @@ export default function GoogleCallbackPage() {
     async function handleCallback() {
       if (typeof window === 'undefined') return;
 
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get('token') || params.get('accessToken');
-      const code = params.get('code');
+      try {
+        const response = await fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'include' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.accessToken) throw new Error(result.message || 'Google sign-in could not be completed.');
 
-      // Check URL hash for Google OAuth implicit flow
-      const hash = window.location.hash ? window.location.hash.substring(1) : '';
-      const hashParams = new URLSearchParams(hash);
-      const idToken = hashParams.get('id_token') || hashParams.get('access_token');
-
-      if (idToken) {
-        try {
-          const base64Url = idToken.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
-
-          localStorage.setItem(
-            'brightloop_user',
-            JSON.stringify({
-              email: payload.email || 'google.user@example.com',
-              role: 'CUSTOMER',
-              name: payload.name || payload.email?.split('@')[0] || 'Google User',
-              customerId: 'cust-google-001',
-              token: idToken,
-            })
-          );
-          router.push('/portal');
-          return;
-        } catch {}
+        const payload = JSON.parse(atob(result.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        localStorage.setItem('brightloop_user', JSON.stringify({
+          email: payload.email,
+          role: payload.role,
+          name: payload.email?.split('@')[0] || 'Google User',
+          customerId: payload.customerId || null,
+          token: result.accessToken,
+        }));
+        router.push(payload.role === 'CUSTOMER' ? '/portal' : `/?role=${payload.role}`);
+      } catch (callbackError) {
+        setError(callbackError instanceof Error ? callbackError.message : 'Google sign-in could not be completed.');
       }
-
-      if (token) {
-        // Direct token callback
-        try {
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
-          
-          localStorage.setItem(
-            'brightloop_user',
-            JSON.stringify({
-              email: payload.email,
-              role: payload.role || 'CUSTOMER',
-              name: payload.email?.split('@')[0] || 'Google User',
-              customerId: payload.customerId || 'cust-google-001',
-              token,
-            })
-          );
-
-          if (payload.role === 'CUSTOMER') {
-            router.push('/portal');
-          } else {
-            router.push(`/?role=${payload.role || 'CUSTOMER'}`);
-          }
-          return;
-        } catch {
-          // Fallback
-        }
-      }
-
-      if (code) {
-        // Exchange code with backend
-        try {
-          const res = await fetch(`${API_URL}/auth/google/callback?code=${encodeURIComponent(code)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.accessToken) {
-              const base64Url = data.accessToken.split('.')[1];
-              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-              const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
-
-              localStorage.setItem(
-                'brightloop_user',
-                JSON.stringify({
-                  email: payload.email,
-                  role: payload.role || 'CUSTOMER',
-                  name: payload.email?.split('@')[0] || 'Google User',
-                  customerId: payload.customerId || 'cust-google-001',
-                  token: data.accessToken,
-                })
-              );
-
-              if (payload.role === 'CUSTOMER') {
-                router.push('/portal');
-              } else {
-                router.push(`/?role=${payload.role || 'CUSTOMER'}`);
-              }
-              return;
-            }
-          }
-        } catch {}
-      }
-
-      // Default demo Google user fallback if OAuth exchange cannot connect
-      localStorage.setItem(
-        'brightloop_user',
-        JSON.stringify({
-          email: 'google.user@example.com',
-          role: 'CUSTOMER',
-          name: 'Google Authenticated User',
-          customerId: 'cust-google-001',
-          token: 'demo-google-token',
-        })
-      );
-      router.push('/portal');
     }
 
     void handleCallback();
