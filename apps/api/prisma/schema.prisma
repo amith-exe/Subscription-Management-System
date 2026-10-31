@@ -68,6 +68,12 @@ enum PaymentMethod {
   OTHER
 }
 
+enum PaymentAttemptStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
 // =========================================================
 // CORE MODELS
 // =========================================================
@@ -301,10 +307,12 @@ model Invoice {
   taxTotal       Decimal         @db.Decimal(12, 2)
   discountTotal  Decimal         @db.Decimal(12, 2)
   total          Decimal         @db.Decimal(12, 2)
+  amountPaid     Decimal         @default(0) @db.Decimal(12, 2)
   subscription   Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
   customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
   lines          InvoiceLine[]
   payments       Payment[]
+  paymentAttempts PaymentAttempt[]
   discountUsages DiscountUsage[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -401,6 +409,22 @@ model Payment {
 
   @@index([invoiceId])
   @@index([paidAt])
+}
+
+model PaymentAttempt {
+  id              String              @id @default(uuid())
+  invoiceId       String
+  providerOrderId String              @unique
+  paymentId       String?             @unique
+  amount          Decimal             @db.Decimal(12, 2)
+  currency        String              @default("INR")
+  status          PaymentAttemptStatus @default(CREATED)
+  method          String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  invoice         Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, status])
 }
 
 // =========================================================

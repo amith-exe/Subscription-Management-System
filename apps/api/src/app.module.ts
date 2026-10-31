@@ -24,8 +24,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['apps/api/.env', '.env'], validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
-  providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
+  providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard],
   exports: [PrismaService],
 })
 export class AppModule {}
