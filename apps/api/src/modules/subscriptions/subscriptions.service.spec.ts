@@ -102,7 +102,7 @@ describe('SubscriptionsService - State Machine & Business Rules', () => {
         status: SubscriptionStatus.CONFIRMED,
         startDate,
       });
-      mockPrisma.subscription.update.mockImplementation(({ data }) => ({
+      mockPrisma.subscription.update.mockImplementation(({ data }: any) => ({
         id: 'sub-1',
         status: data.status,
         nextBillingDate: data.nextBillingDate,
