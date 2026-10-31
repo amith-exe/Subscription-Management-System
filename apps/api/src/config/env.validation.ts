@@ -1,0 +1,26 @@
+import Joi from 'joi';
+
+export const envValidationSchema = Joi.object({
+  NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
+  DATABASE_URL: Joi.string().uri({ scheme: ['postgresql', 'postgres'] }).required(),
+  API_PORT: Joi.number().port().default(3001),
+  APP_URL: Joi.string().uri().default('http://localhost:3001'),
+  WEB_URL: Joi.string().uri().default('http://localhost:3000'),
+  CORS_ORIGINS: Joi.string().default('http://localhost:3000'),
+  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+  JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+  SMTP_HOST: Joi.string().required(),
+  SMTP_PORT: Joi.number().port().required(),
+  SMTP_SECURE: Joi.boolean().truthy('true').falsy('false').default(false),
+  SMTP_USER: Joi.string().required(),
+  SMTP_PASS: Joi.string().required(),
+  MAIL_FROM_NAME: Joi.string().required(),
+  MAIL_FROM_ADDRESS: Joi.string().email().required(),
+  SWAGGER_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
+  LOGIN_2FA_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
+  QUEUE_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
+  REDIS_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
+  REDIS_URL: Joi.string().uri({ scheme: ['redis', 'rediss'] }).default('redis://localhost:6379'),
+  RESET_METHOD: Joi.string().valid('LINK', 'OTP').default('LINK'),
+  LOG_OTP_IN_DEV: Joi.boolean().truthy('true').falsy('false').default(false),
+}).unknown(true);
