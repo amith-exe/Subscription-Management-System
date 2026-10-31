@@ -20,10 +20,12 @@ import { MailModule } from './modules/mail/mail.module';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { MustChangePasswordGuard } from './common/auth/must-change-password.guard';
 import { RolesGuard } from './common/auth/roles.guard';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['apps/api/.env', '.env'], validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
-  providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard],
+  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['apps/api/.env', '.env'], validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
+  providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard, { provide: APP_GUARD, useClass: ThrottlerGuard }],
   exports: [PrismaService],
 })
 export class AppModule {}
