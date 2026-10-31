@@ -50,20 +50,38 @@ export class PortalController {
       return user.customerId;
     }
 
-    // For ADMIN, allow query override or fallback to admin's customerId
-    if (queryCustomerId) {
-      return queryCustomerId;
+    // Role is ADMIN
+    if (queryCustomerId && queryCustomerId.trim() !== '') {
+      return queryCustomerId.trim();
     }
+
     if (user.customerId) {
       return user.customerId;
     }
-    throw new BadRequestException('Admin must supply ?customerId query parameter to view tenant portal');
+
+    throw new BadRequestException(
+      'Admin request requires a target customerId query parameter (e.g. ?customerId=<uuid>)',
+    );
   }
 
   @Get('subscriptions')
-  @ApiOperation({ summary: 'List customer subscriptions with plan and variant items' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Admin override tenant filter' })
-  @ApiResponse({ status: 200, type: [PortalSubscriptionResponseDto] })
+  @ApiOperation({
+    summary: 'List customer subscriptions',
+    description:
+      'Fetches all active and past subscriptions belonging to the authenticated customer. Strictly isolates tenant data.',
+  })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of customer subscriptions with line items and plan rules',
+    type: [PortalSubscriptionResponseDto],
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT access token' })
+  @ApiResponse({ status: 403, description: 'Forbidden (Not a Customer or Admin)' })
   async getSubscriptions(
     @CurrentUser() user: AuthenticatedUser,
     @Query('customerId') queryCustomerId?: string,
@@ -73,11 +91,19 @@ export class PortalController {
   }
 
   @Get('subscriptions/:id')
-  @ApiOperation({ summary: 'Get single subscription detail (strictly tenant isolated)' })
-  @ApiParam({ name: 'id', description: 'Subscription ID' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Admin override tenant filter' })
+  @ApiOperation({
+    summary: 'Get subscription details',
+    description:
+      'Fetches single subscription details by ID. Enforces tenant boundary: returns 404 if subscription belongs to another tenant.',
+  })
+  @ApiParam({ name: 'id', description: 'Subscription UUID' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
   @ApiResponse({ status: 200, type: PortalSubscriptionResponseDto })
-  @ApiResponse({ status: 404, description: 'Subscription not found for this tenant' })
+  @ApiResponse({ status: 404, description: 'Subscription not found or belongs to another tenant' })
   async getSubscription(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -88,8 +114,15 @@ export class PortalController {
   }
 
   @Get('invoices')
-  @ApiOperation({ summary: 'List all invoices and receipts for the customer' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Admin override tenant filter' })
+  @ApiOperation({
+    summary: 'List customer invoices',
+    description: 'Lists all historical and overdue invoices for the authenticated tenant.',
+  })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
   @ApiResponse({ status: 200, type: [PortalInvoiceResponseDto] })
   async getInvoices(
     @CurrentUser() user: AuthenticatedUser,
@@ -100,11 +133,19 @@ export class PortalController {
   }
 
   @Get('invoices/:id')
-  @ApiOperation({ summary: 'Get single invoice detail (strictly tenant isolated)' })
-  @ApiParam({ name: 'id', description: 'Invoice ID' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Admin override tenant filter' })
+  @ApiOperation({
+    summary: 'Get invoice details',
+    description:
+      'Fetches details of a specific invoice. Enforces tenant isolation (404 if cross-tenant).',
+  })
+  @ApiParam({ name: 'id', description: 'Invoice UUID' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
   @ApiResponse({ status: 200, type: PortalInvoiceResponseDto })
-  @ApiResponse({ status: 404, description: 'Invoice not found for this tenant' })
+  @ApiResponse({ status: 404, description: 'Invoice not found or belongs to another tenant' })
   async getInvoice(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -115,11 +156,17 @@ export class PortalController {
   }
 
   @Get('invoices/:id/pdf')
-  @ApiOperation({ summary: 'Download or view formatted PDF receipt for customer invoice' })
-  @ApiParam({ name: 'id', description: 'Invoice ID' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Admin override tenant filter' })
-  @ApiResponse({ status: 200, description: 'Invoice receipt structured data for PDF printing' })
-  @ApiResponse({ status: 404, description: 'Invoice not found for this tenant' })
+  @ApiOperation({
+    summary: 'Download / view official invoice PDF metadata',
+    description: 'Provides official invoice receipt and PDF download payload for self-service billing.',
+  })
+  @ApiParam({ name: 'id', description: 'Invoice UUID' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({ status: 200, description: 'PDF metadata and printable invoice object' })
   async getInvoicePdf(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -130,12 +177,20 @@ export class PortalController {
   }
 
   @Post('subscriptions/:id/close')
-  @ApiOperation({ summary: 'Early cancel subscription (allowed only if plan.allowEarlyClose === true)' })
-  @ApiParam({ name: 'id', description: 'Subscription ID' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Admin override tenant filter' })
+  @ApiOperation({
+    summary: 'Early closure of subscription by customer',
+    description:
+      'Allows customer to close an active subscription early ONLY if the underlying Plan policy flag `allowEarlyClose` is true. Throws 400 Bad Request if disabled.',
+  })
+  @ApiParam({ name: 'id', description: 'Subscription UUID to close' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
   @ApiResponse({ status: 200, type: CloseSubscriptionResponseDto })
-  @ApiResponse({ status: 400, description: 'Plan policy does not permit early cancellation' })
-  @ApiResponse({ status: 404, description: 'Subscription not found for this tenant' })
+  @ApiResponse({ status: 400, description: 'Plan policy does not permit early closure' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
   async closeSubscription(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -145,4 +200,3 @@ export class PortalController {
     return this.portalService.closeSubscription(customerId, id);
   }
 }
-

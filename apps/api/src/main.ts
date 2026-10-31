@@ -17,7 +17,9 @@ async function bootstrap() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", 'https://checkout.razorpay.com', 'https://*.razorpay.com'],
+        connectSrc: ["'self'", 'https://api.razorpay.com', 'https://*.razorpay.com'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://*.razorpay.com'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
         upgradeInsecureRequests: null,
