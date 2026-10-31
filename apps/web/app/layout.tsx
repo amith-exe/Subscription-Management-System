@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Brightloop ERP — Subscription Management',
-  description: 'Enterprise Swiss Neo-Bento Subscription & Billing Platform',
+  description: 'Enterprise Subscription & Billing Management Platform',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
