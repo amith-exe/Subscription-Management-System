@@ -2,7 +2,7 @@
 
 ## API documentation
 
-When the API is running in development, Swagger UI is available at `http://localhost:3001/api/docs` and the OpenAPI JSON document at `http://localhost:3001/api/docs-json`. Swagger documents the payment recording, payment history, invoice payment history, and Razorpay checkout endpoints. The API port can be changed with `API_PORT`.
+When the API is running with `SWAGGER_ENABLED=true` in development, Swagger UI is available at `http://localhost:3001/api/docs` and the OpenAPI JSON document at `http://localhost:3001/api/docs-json`. Swagger documents payment recording/history, Razorpay checkout, and the billing run endpoint. The API port can be changed with `API_PORT`.
 
 A modular-monolith subscription and billing platform built with NestJS, Prisma, PostgreSQL, Redis/BullMQ, and Next.js.
 
@@ -42,6 +42,7 @@ Never put `RAZORPAY_KEY_SECRET` in browser code or commit real credentials. Use 
 
 - Money uses Prisma `Decimal`; never JavaScript floats.
 - Billing is idempotent through the unique invoice period constraint and transaction boundaries.
+- Billing queues one BullMQ job per due subscription. Set `QUEUE_ENABLED=true` and configure `REDIS_URL`; nightly billing runs at 02:00 and overdue reminders at 08:00 in the API server timezone.
 - State changes go through transition maps, never direct controller status updates.
 - Customer scoping is enforced in services as well as controllers.
 - Reporting belongs in raw SQL/materialized views and snapshot tables when the query is heavy.

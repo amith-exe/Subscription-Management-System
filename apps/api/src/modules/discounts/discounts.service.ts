@@ -58,7 +58,7 @@ export class DiscountsService {
   async deactivate(id: string) {
     const discount = await this.prisma.discount.findUnique({ where: { id } });
     if (!discount) throw new NotFoundException('Discount not found');
-    return this.prisma.discount.update({ where: { id }, data: { endDate: new Date() } });
+    return this.prisma.discount.update({ where: { id }, data: { isActive: false, endDate: new Date() } });
   }
 
   async getApplicable(subscriptionId: string, date: Date) {
@@ -66,7 +66,7 @@ export class DiscountsService {
     if (!subscription) throw new NotFoundException('Subscription not found');
     const productIds = [...new Set(subscription.lines.map((line) => line.productId))];
     return this.prisma.discount.findMany({
-      where: { startDate: { lte: date }, AND: [{ OR: [{ endDate: null }, { endDate: { gte: date } }] }, { OR: [
+      where: { isActive: true, startDate: { lte: date }, AND: [{ OR: [{ endDate: null }, { endDate: { gte: date } }] }, { OR: [
         { appliesTo: DiscountScope.SUBSCRIPTION, subscriptions: { some: { subscriptionId } } },
         { appliesTo: DiscountScope.PRODUCT, products: { some: { productId: { in: productIds } } } },
       ] }] },

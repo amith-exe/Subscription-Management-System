@@ -1,6 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { TaxType } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma, TaxType } from '@prisma/client';
 import { TaxesService } from './taxes.service';
 
 describe('TaxesService - Calculation & Validation Contract', () => {
@@ -23,11 +22,11 @@ describe('TaxesService - Calculation & Validation Contract', () => {
     mockPrisma.tax.findUnique.mockResolvedValue({
       id: 'tax-vat',
       name: 'Standard VAT',
-      rate: new Decimal('18.00'),
+      rate: new Prisma.Decimal('18.00'),
       type: TaxType.PERCENTAGE,
     });
 
-    const result = await service.calculate(new Decimal('1000.00'), 'tax-vat');
+    const result = await service.calculate(new Prisma.Decimal('1000.00'), 'tax-vat');
     expect(result.taxAmount.toString()).toBe('180');
     expect(result.taxRate.toString()).toBe('18');
   });
@@ -36,11 +35,11 @@ describe('TaxesService - Calculation & Validation Contract', () => {
     mockPrisma.tax.findUnique.mockResolvedValue({
       id: 'tax-fixed',
       name: 'Fixed Eco Fee',
-      rate: new Decimal('5.00'),
+      rate: new Prisma.Decimal('5.00'),
       type: TaxType.FIXED,
     });
 
-    const result = await service.calculate(new Decimal('250.00'), 'tax-fixed', 3);
+    const result = await service.calculate(new Prisma.Decimal('250.00'), 'tax-fixed', 3);
     expect(result.taxAmount.toString()).toBe('15');
   });
 

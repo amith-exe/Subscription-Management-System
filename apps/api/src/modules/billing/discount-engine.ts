@@ -1,11 +1,10 @@
-import { Decimal } from '@prisma/client/runtime/library';
-import { DiscountScope, DiscountType } from '@prisma/client';
+import { DiscountScope, DiscountType, Prisma } from '@prisma/client';
 
 export type DiscountCandidate = {
   id: string;
   type: DiscountType;
-  value: Decimal;
-  minPurchase: Decimal | null;
+  value: Prisma.Decimal;
+  minPurchase: Prisma.Decimal | null;
   minQuantity: number | null;
   usageLimit: number | null;
   usedCount: number;
@@ -17,7 +16,7 @@ export type DiscountCandidate = {
   subscriptions?: Array<{ subscriptionId: string }>;
 };
 
-export type DraftInvoiceLine = { productId: string; quantity: number; amount: Decimal };
+export type DraftInvoiceLine = { productId: string; quantity: number; amount: Prisma.Decimal };
 export type DraftInvoice = {
   subscriptionId: string;
   lines: DraftInvoiceLine[];
@@ -27,7 +26,7 @@ export type DraftInvoice = {
 export class DiscountEngine {
   static calculate(draftInvoice: DraftInvoice, candidates: DiscountCandidate[]) {
     const date = draftInvoice.date ?? new Date();
-    const subtotal = draftInvoice.lines.reduce((sum, line) => sum.plus(line.amount), new Decimal(0));
+    const subtotal = draftInvoice.lines.reduce((sum, line) => sum.plus(line.amount), new Prisma.Decimal(0));
     const quantity = draftInvoice.lines.reduce((sum, line) => sum + line.quantity, 0);
 
     return candidates.filter((discount) => {
@@ -42,13 +41,13 @@ export class DiscountEngine {
     }).map((discount) => {
       const eligibleSubtotal = discount.appliesTo === DiscountScope.PRODUCT
         ? draftInvoice.lines.filter((line) => (discount.products ?? []).some((link) => link.productId === line.productId))
-          .reduce((sum, line) => sum.plus(line.amount), new Decimal(0))
+          .reduce((sum, line) => sum.plus(line.amount), new Prisma.Decimal(0))
         : subtotal;
       return {
         discountId: discount.id,
         amount: discount.type === DiscountType.PERCENT
           ? eligibleSubtotal.mul(discount.value).div(100).toDecimalPlaces(4)
-          : Decimal.min(discount.value, eligibleSubtotal),
+          : Prisma.Decimal.min(discount.value, eligibleSubtotal),
       };
     });
   }

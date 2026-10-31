@@ -1,13 +1,16 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { PaymentMethod, Role } from '@prisma/client';
 import { Roles } from '../../common/auth/roles.decorator';
+import { RolesGuard } from '../../common/auth/roles.guard';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, ListPaymentsQueryDto, PaginatedPaymentsResponseDto, PaymentResponseDto, VerifyRazorpayPaymentDto } from './payments.dto';
 
 @ApiTags('payments')
+@ApiBearerAuth('access-token')
+@UseGuards(RolesGuard)
 @Controller()
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
