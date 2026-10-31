@@ -19,7 +19,7 @@ export class CreatePlanDto {
   })
   @IsString()
   @IsNotEmpty()
-  name!: string;
+  name: string;
 
   @ApiProperty({
     description: 'Base price for the plan interval (Decimal string)',
@@ -27,7 +27,7 @@ export class CreatePlanDto {
   })
   @IsNumberString()
   @IsNotEmpty()
-  price!: string;
+  price: string;
 
   @ApiProperty({
     description: 'Billing recurrence cadence',
@@ -36,7 +36,7 @@ export class CreatePlanDto {
   })
   @IsEnum(BillingPeriod)
   @IsNotEmpty()
-  billingPeriod!: BillingPeriod;
+  billingPeriod: BillingPeriod;
 
   @ApiPropertyOptional({
     description: 'Minimum purchase quantity required for this plan',
@@ -54,7 +54,7 @@ export class CreatePlanDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  startDate!: string;
+  startDate: string;
 
   @ApiPropertyOptional({
     description: 'Expiration date of plan availability (ISO 8601 string)',

@@ -10,8 +10,6 @@ export class DiscountsService {
   async create(input: CreateDiscountDto) {
     this.validateScope(input.appliesTo, input.productIds, input.subscriptionIds);
     return this.prisma.discount.create({ data: {
-      name: input.name,
-      code: input.code ?? null,
       type: input.type,
       value: new Prisma.Decimal(input.value),
       minPurchase: input.minPurchase === undefined ? null : new Prisma.Decimal(input.minPurchase),
@@ -25,15 +23,8 @@ export class DiscountsService {
     }, include: { products: true, subscriptions: true } });
   }
 
-  list(activeOnly = false) {
-    return this.prisma.discount.findMany({
-      where: activeOnly ? {
-        isActive: true,
-        startDate: { lte: new Date() },
-        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
-      } : undefined,
-      include: { products: true, subscriptions: true }, orderBy: { startDate: 'desc' },
-    });
+  list() {
+    return this.prisma.discount.findMany({ include: { products: true, subscriptions: true }, orderBy: { startDate: 'desc' } });
   }
 
   async update(id: string, input: UpdateDiscountDto) {
@@ -44,8 +35,6 @@ export class DiscountsService {
       this.validateScope(appliesTo, input.productIds, input.subscriptionIds);
     }
     const data: Prisma.DiscountUpdateInput = {
-      ...(input.name !== undefined && { name: input.name }),
-      ...(input.code !== undefined && { code: input.code }),
       ...(input.type !== undefined && { type: input.type }),
       ...(input.value !== undefined && { value: new Prisma.Decimal(input.value) }),
       ...(input.minPurchase !== undefined && { minPurchase: input.minPurchase === null ? null : new Prisma.Decimal(input.minPurchase) }),

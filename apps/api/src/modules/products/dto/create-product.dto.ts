@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsNumberString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsNumberString, IsBoolean } from 'class-validator';
 
 export class CreateProductDto {
   @ApiProperty({
@@ -8,7 +8,7 @@ export class CreateProductDto {
   })
   @IsString()
   @IsNotEmpty()
-  name!: string;
+  name: string;
 
   @ApiProperty({
     description: 'Product type classification',
@@ -17,7 +17,7 @@ export class CreateProductDto {
   })
   @IsString()
   @IsNotEmpty()
-  type!: string;
+  type: string;
 
   @ApiProperty({
     description: 'Base sales price (Decimal string)',
@@ -25,7 +25,7 @@ export class CreateProductDto {
   })
   @IsNumberString()
   @IsNotEmpty()
-  salesPrice!: string;
+  salesPrice: string;
 
   @ApiProperty({
     description: 'Cost price for margin reporting (Decimal string)',
@@ -33,7 +33,7 @@ export class CreateProductDto {
   })
   @IsNumberString()
   @IsNotEmpty()
-  costPrice!: string;
+  costPrice: string;
 
   @ApiPropertyOptional({
     description: 'Internal notes and product specifications',
@@ -42,4 +42,12 @@ export class CreateProductDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether the product is currently available for purchase',
+    default: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
