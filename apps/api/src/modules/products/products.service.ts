@@ -3,6 +3,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
@@ -48,6 +49,21 @@ export class ProductsService {
       throw new NotFoundException(`Product with ID "${id}" not found`);
     }
     return product;
+  }
+
+  async update(id: string, dto: UpdateProductDto) {
+    await this.findOne(id);
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        ...(dto.name && { name: dto.name }),
+        ...(dto.type && { type: dto.type }),
+        ...(dto.salesPrice && { salesPrice: new Decimal(dto.salesPrice) }),
+        ...(dto.costPrice && { costPrice: new Decimal(dto.costPrice) }),
+        ...(dto.notes !== undefined && { notes: dto.notes }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      },
+    });
   }
 
   async addVariant(productId: string, dto: CreateVariantDto) {
