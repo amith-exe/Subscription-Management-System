@@ -15,7 +15,8 @@ import {
   Calendar,
   Layers,
   Building2,
-  ExternalLink
+  ExternalLink,
+  LogOut
 } from 'lucide-react';
 import { BENTO } from '@/components/bento/styles';
 import { StatusBadge } from '@/components/bento/StatusBadge';
@@ -254,6 +255,20 @@ export default function CustomerPortalPage() {
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Operations
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('brightloop_user');
+                }
+                window.location.href = '/login';
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold border-2 border-stone-900/15 transition-all cursor-pointer"
+              title="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5 text-stone-500" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </header>

@@ -154,3 +154,4 @@ export class CloseSubscriptionResponseDto {
   @ApiProperty({ example: 'Subscription successfully closed' })
   message!: string;
 }
+

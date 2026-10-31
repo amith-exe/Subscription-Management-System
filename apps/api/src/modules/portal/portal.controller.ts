@@ -145,3 +145,4 @@ export class PortalController {
     return this.portalService.closeSubscription(customerId, id);
   }
 }
+

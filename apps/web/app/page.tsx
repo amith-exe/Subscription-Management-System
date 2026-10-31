@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Layers,
   FileText,
@@ -278,28 +279,51 @@ function StatusBadge({ status, isOverdue }: { status: string; isOverdue?: boolea
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [activePersona, setActivePersona] = useState<WorkspaceRole>('INTERNAL');
 
-  // Sync role from URL query param or localStorage
+  // Authenticate session and sync role from URL query param or localStorage
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const urlRole = params.get('role') as WorkspaceRole;
+      const stored = localStorage.getItem('brightloop_user');
+
+      if (!stored && !urlRole) {
+        // Unauthenticated visitor -> redirect to login
+        router.push('/login');
+        return;
+      }
+
       if (urlRole && ['INTERNAL', 'FINANCE', 'ADMIN', 'CUSTOMER'].includes(urlRole)) {
+        if (urlRole === 'CUSTOMER') {
+          router.push('/portal');
+          return;
+        }
         setActivePersona(urlRole);
-      } else {
-        const stored = localStorage.getItem('brightloop_user');
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (parsed.role && ['INTERNAL', 'FINANCE', 'ADMIN', 'CUSTOMER'].includes(parsed.role)) {
-              setActivePersona(parsed.role);
-            }
-          } catch {}
+      } else if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.role === 'CUSTOMER') {
+            router.push('/portal');
+            return;
+          }
+          if (parsed.role && ['INTERNAL', 'FINANCE', 'ADMIN'].includes(parsed.role)) {
+            setActivePersona(parsed.role);
+          }
+        } catch {
+          router.push('/login');
         }
       }
     }
-  }, []);
+  }, [router]);
+
+  const handleSignOut = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brightloop_user');
+    }
+    router.push('/login');
+  };
   const [staffSection, setStaffSection] = useState<'SUBSCRIPTIONS' | 'INVOICES'>('SUBSCRIPTIONS');
   const [subscriptions, setSubscriptions] = useState(INITIAL_SUBSCRIPTIONS);
   const [invoices, setInvoices] = useState(INITIAL_INVOICES);
@@ -537,14 +561,15 @@ export default function HomePage() {
                 </Link>
               )}
 
-              <Link
-                href="/login"
+              <button
+                type="button"
+                onClick={handleSignOut}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold border-2 border-stone-900/15 transition-all cursor-pointer"
                 title="Switch User / Sign Out"
               >
                 <LogOut className="w-3.5 h-3.5 text-stone-500" />
                 <span>Sign Out</span>
-              </Link>
+              </button>
             </div>
           </header>
 
