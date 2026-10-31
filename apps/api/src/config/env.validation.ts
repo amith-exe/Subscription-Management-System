@@ -25,5 +25,4 @@ export const envValidationSchema = Joi.object({
   LOG_OTP_IN_DEV: Joi.boolean().truthy('true').falsy('false').default(false),
   RAZORPAY_KEY_ID: Joi.string().optional(),
   RAZORPAY_KEY_SECRET: Joi.string().optional(),
-  RAZORPAY_WEBHOOK_SECRET: Joi.string().optional(),
 }).unknown(true);

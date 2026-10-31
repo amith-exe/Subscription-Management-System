@@ -1,8 +1,6 @@
-import { Body, Controller, Headers, Param, ParseUUIDPipe, Post, RawBodyRequest, Req } from '@nestjs/common';
+import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
-import { Public } from '../../common/auth/public.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { PaymentsService } from './payments.service';
 import { VerifyRazorpayPaymentDto } from './payments.dto';
@@ -26,13 +24,4 @@ export class PaymentsController {
     return this.payments.verifyCheckoutPayment(user, body);
   }
 
-  @Post('webhook')
-  @Public()
-  @ApiOperation({ summary: 'Receive signed Razorpay payment webhooks' })
-  webhook(
-    @Req() request: RawBodyRequest<Request>,
-    @Headers('x-razorpay-signature') signature: string | undefined,
-  ) {
-    return this.payments.handleWebhook(request.rawBody, signature);
-  }
 }

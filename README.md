@@ -32,12 +32,11 @@ Add Razorpay **Test Mode** credentials to the root `.env` before accepting test 
 ```env
 RAZORPAY_KEY_ID=rzp_test_...
 RAZORPAY_KEY_SECRET=...
-RAZORPAY_WEBHOOK_SECRET=...
 ```
 
-Apply the payment-attempt migration, then run the API and web app. Customers sign in at `/portal`; confirmed invoice balances show a Razorpay checkout button. Configure a Razorpay Test Mode webhook to `https://<your-public-api-host>/payments/webhook` and subscribe to `payment.captured`. Use the same webhook secret in `RAZORPAY_WEBHOOK_SECRET`. The checkout callback is also verified against Razorpay's payment API before the invoice is updated.
+Apply the payment-attempt migration, then run the API and web app. Customers sign in at `/portal`; confirmed invoice balances show a Razorpay checkout button. The checkout callback signature and captured payment status are verified by the API before the invoice is updated.
 
-Never put `RAZORPAY_KEY_SECRET` or `RAZORPAY_WEBHOOK_SECRET` in browser code or commit real credentials. Use Test Mode credentials for development and separate Live Mode credentials for production.
+Never put `RAZORPAY_KEY_SECRET` in browser code or commit real credentials. Use Test Mode credentials for development and separate Live Mode credentials for production.
 
 ## Design rules
 

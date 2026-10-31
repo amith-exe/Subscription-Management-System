@@ -10,7 +10,7 @@ import { RolesGuard } from './common/auth/roles.guard';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
   app.use(cookieParser());
   app.use(helmet({

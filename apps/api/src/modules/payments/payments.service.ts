@@ -118,32 +118,6 @@ export class PaymentsService {
     return this.recordCapturedPayment(attempt.providerOrderId, payment);
   }
 
-  async handleWebhook(rawBody: Buffer | undefined, signature?: string) {
-    if (!rawBody) throw new BadRequestException('Missing raw webhook payload');
-    const secret = this.config.get<string>('RAZORPAY_WEBHOOK_SECRET');
-    if (!secret) throw new ServiceUnavailableException('Razorpay webhook secret is not configured');
-    const expected = createHmac('sha256', secret).update(rawBody).digest();
-    const supplied = signature && /^[a-f\d]{64}$/i.test(signature) ? Buffer.from(signature, 'hex') : Buffer.alloc(0);
-    if (supplied.length !== expected.length || !timingSafeEqual(expected, supplied)) {
-      throw new UnauthorizedException('Razorpay webhook signature verification failed');
-    }
-
-    let event: {
-      event?: string;
-      payload?: { payment?: { entity?: RazorpayPayment } };
-    };
-    try {
-      event = JSON.parse(rawBody.toString('utf8')) as typeof event;
-    } catch {
-      throw new BadRequestException('Invalid webhook JSON');
-    }
-    const payment = event.payload?.payment?.entity;
-    if (event.event === 'payment.captured' && payment?.order_id) {
-      await this.recordCapturedPayment(payment.order_id, payment);
-    }
-    return { received: true };
-  }
-
   private async recordCapturedPayment(orderId: string, payment: RazorpayPayment) {
     const attempt = await this.prisma.paymentAttempt.findUnique({
       where: { providerOrderId: orderId },
