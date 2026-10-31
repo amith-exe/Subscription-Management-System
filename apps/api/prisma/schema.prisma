@@ -17,6 +17,12 @@ enum Role {
   CUSTOMER
 }
 
+enum OtpPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+  LOGIN_2FA
+}
+
 enum BillingPeriod {
   DAILY
   WEEKLY
@@ -37,6 +43,7 @@ enum InvoiceStatus {
   CONFIRMED
   PAID
   CANCELLED
+  OVERDUE
 }
 
 enum TaxType {
@@ -66,18 +73,70 @@ enum PaymentMethod {
 // =========================================================
 
 model User {
-  id             String       @id @default(uuid())
-  email          String       @unique
-  passwordHash   String
-  role           Role         @default(CUSTOMER)
-  resetTokenHash String?
-  resetExpiry    DateTime?
-  customer       Customer?
-  auditLogs      AuditLog[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                 String          @id @default(uuid())
+  email              String          @unique
+  passwordHash       String
+  role               Role            @default(CUSTOMER)
+  emailVerifiedAt    DateTime?
+  mustChangePassword Boolean         @default(false)
+  isActive           Boolean         @default(true)
+  failedLoginCount   Int             @default(0)
+  lockedUntil        DateTime?
+  customer           Customer?
+  otps               Otp[]
+  refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs          AuditLog[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   @@index([role])
+}
+
+model Otp {
+  id         String     @id @default(uuid())
+  userId     String
+  purpose    OtpPurpose
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int        @default(0)
+  maxAttempts Int       @default(5)
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+}
+
+model RefreshToken {
+  id          String        @id @default(uuid())
+  userId      String
+  tokenHash   String
+  familyId    String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedById String?       @unique
+  userAgent   String?
+  ip          String?
+  createdAt   DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy  RefreshToken? @relation("RefreshReplacement", fields: [replacedById], references: [id])
+  replaces    RefreshToken? @relation("RefreshReplacement")
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Customer {
@@ -103,6 +162,7 @@ model Product {
   salesPrice        Decimal                 @db.Decimal(12, 2)
   costPrice         Decimal                 @db.Decimal(12, 2)
   notes             String?
+  isActive          Boolean             @default(true)
   variants          ProductVariant[]
   quotationLines    QuotationTemplateLine[]
   subscriptionLines SubscriptionLine[]
