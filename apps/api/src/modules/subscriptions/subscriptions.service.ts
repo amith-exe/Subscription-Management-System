@@ -23,6 +23,18 @@ import { CreateSubscriptionLineDto } from './dto/create-subscription-line.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SubscriptionFiltersDto } from './dto/subscription-filters.dto';
 
+type CalculatedLine = {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  unitPrice: Decimal;
+  taxId: string | null;
+  taxRate: Decimal;
+  taxAmount: Decimal;
+  subtotal: Decimal;
+  totalAmount: Decimal;
+};
+
 @Injectable()
 export class SubscriptionsService {
   constructor(
@@ -36,7 +48,7 @@ export class SubscriptionsService {
   /**
    * Generates atomic, sequential numbers such as SUB-000123 inside a transaction
    */
-  async generateSequenceNumber(tx: Prisma.TransactionClient): Promise<string> {
+  async generateSequenceNumber(tx: PrismaService): Promise<string> {
     const seq = await tx.sequence.upsert({
       where: { name: 'SUBSCRIPTION' },
       update: { currentValue: { increment: 1 } },
@@ -62,7 +74,7 @@ export class SubscriptionsService {
       throw new BadRequestException('A subscription must have at least one product line item');
     }
 
-    const calculatedLines = [];
+    const calculatedLines: CalculatedLine[] = [];
 
     for (const line of lines) {
       if (line.quantity < planMinQuantity) {
@@ -426,7 +438,7 @@ export class SubscriptionsService {
    */
   async advanceNextBillingDate(
     subscriptionId: string,
-    tx?: Prisma.TransactionClient,
+    tx?: PrismaService,
   ): Promise<Date> {
     const client = tx ?? this.prisma;
     const sub = await client.subscription.findUnique({

@@ -93,7 +93,7 @@ export class PaymentsService {
         ...(filters.dateTo && { lte: filters.dateTo }),
       } }),
     };
-    const [data, total] = await this.prisma.$transaction([
+    const [data, total] = await Promise.all([
       this.prisma.payment.findMany({ where, include: { invoice: true }, orderBy: { paidAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.payment.count({ where }),
     ]);
