@@ -11,11 +11,8 @@ import {
   CheckCircle2,
   ArrowLeft,
   RefreshCw,
-  FileText,
-  Calendar,
   Layers,
   Building2,
-  ExternalLink
 } from 'lucide-react';
 import { BENTO } from '@/components/bento/styles';
 import { StatusBadge } from '@/components/bento/StatusBadge';
@@ -24,114 +21,23 @@ import type { PortalSubscription, PortalInvoice } from '@/types/portal';
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
-// Fallback seed records adhering directly to the Brightloop Acme Corp test data
-const SEED_PORTAL_SUBSCRIPTIONS: PortalSubscription[] = [
-  {
-    id: 'sub-1',
-    number: 'SUB-000001',
-    status: 'ACTIVE',
-    planName: 'Professional Monthly',
-    billingPeriod: 'MONTHLY',
-    startDate: '2026-09-01T00:00:00.000Z',
-    nextBillingDate: '2026-11-01T00:00:00.000Z',
-    allowEarlyClose: true,
-    totalAmount: 1250.8,
-    lines: [
-      {
-        id: 'line-1',
-        productId: 'prod-1',
-        productName: 'Brightloop ERP Platform',
-        variantId: 'var-1',
-        variantName: 'Brand: Odoo (+₹560.00)',
-        quantity: 1,
-        unitPrice: 1060.0,
-        amount: 1060.0,
-        taxAmount: 190.8,
-      },
-    ],
-  },
-  {
-    id: 'sub-4',
-    number: 'SUB-000004',
-    status: 'ACTIVE',
-    planName: 'Professional Monthly',
-    billingPeriod: 'MONTHLY',
-    startDate: '2026-10-01T00:00:00.000Z',
-    nextBillingDate: '2026-11-01T00:00:00.000Z',
-    allowEarlyClose: false,
-    totalAmount: 531.0,
-    lines: [
-      {
-        id: 'line-4',
-        productId: 'prod-2',
-        productName: 'Cloud Storage 1TB Add-on',
-        variantId: null,
-        variantName: 'PROMO10 (-10% Off)',
-        quantity: 10,
-        unitPrice: 50.0,
-        amount: 450.0,
-        taxAmount: 81.0,
-      },
-    ],
-  },
-];
+type RazorpayCheckout = new (options: {
+  key: string; amount: number; currency: string; name: string; description: string; order_id: string;
+  prefill: { name: string; email: string }; theme: { color: string };
+  modal: { ondismiss: () => void };
+  handler: (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => void;
+}) => { open: () => void; on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void };
 
-const SEED_PORTAL_INVOICES: PortalInvoice[] = [
-  {
-    id: 'inv-1',
-    number: 'INV-000001',
-    subscriptionId: 'sub-1',
-    status: 'PAID',
-    isOverdue: false,
-    issueDate: '2026-09-01T00:00:00.000Z',
-    dueDate: '2026-10-01T00:00:00.000Z',
-    subtotal: 1060.0,
-    discountTotal: 0.0,
-    taxTotal: 190.8,
-    total: 1250.8,
-    amountPaid: 1250.8,
-    lines: [
-      {
-        id: 'iline-1',
-        description: 'Brightloop ERP Platform (Brand: Odoo)',
-        quantity: 1,
-        unitPrice: 1060.0,
-        discountAmount: 0.0,
-        taxAmount: 190.8,
-        amount: 1060.0,
-      },
-    ],
-  },
-  {
-    id: 'inv-4',
-    number: 'INV-000004',
-    subscriptionId: 'sub-4',
-    status: 'CONFIRMED',
-    isOverdue: true,
-    issueDate: '2026-10-01T00:00:00.000Z',
-    dueDate: '2026-10-05T00:00:00.000Z',
-    subtotal: 500.0,
-    discountTotal: 50.0,
-    taxTotal: 81.0,
-    total: 531.0,
-    amountPaid: 0.0,
-    lines: [
-      {
-        id: 'iline-4',
-        description: 'Cloud Storage 1TB Add-on × 10 (PROMO10 -10%)',
-        quantity: 10,
-        unitPrice: 50.0,
-        discountAmount: 50.0,
-        taxAmount: 81.0,
-        amount: 450.0,
-      },
-    ],
-  },
-];
+declare global { interface Window { Razorpay?: RazorpayCheckout } }
 
 export default function CustomerPortalPage() {
-  const [subscriptions, setSubscriptions] = useState<PortalSubscription[]>(SEED_PORTAL_SUBSCRIPTIONS);
-  const [invoices, setInvoices] = useState<PortalInvoice[]>(SEED_PORTAL_INVOICES);
+  const [accessToken, setAccessToken] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
+  const [subscriptions, setSubscriptions] = useState<PortalSubscription[]>([]);
+  const [invoices, setInvoices] = useState<PortalInvoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -143,12 +49,12 @@ export default function CustomerPortalPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const fetchPortalData = useCallback(async () => {
+  const fetchPortalData = useCallback(async (token: string) => {
     setLoading(true);
     try {
       const [subsRes, invsRes] = await Promise.all([
-        fetch(`${API_URL}/portal/subscriptions`, { cache: 'no-store' }),
-        fetch(`${API_URL}/portal/invoices`, { cache: 'no-store' }),
+        fetch(`${API_URL}/portal/subscriptions`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/portal/invoices`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (subsRes.ok && invsRes.ok) {
@@ -157,20 +63,141 @@ export default function CustomerPortalPage() {
         setSubscriptions(subsData.data || subsData);
         setInvoices(invsData.data || invsData);
         setApiConnected(true);
+        setAuthError('');
       } else {
-        // Fallback to seeded demo tenant records
         setApiConnected(false);
+        setSubscriptions([]);
+        setInvoices([]);
+        if ([401, 403].includes(subsRes.status) || [401, 403].includes(invsRes.status)) {
+          setAuthError(subsRes.status === 403 || invsRes.status === 403
+            ? 'This account does not have customer portal access.'
+            : 'Your session expired. Please sign in again.');
+          setAccessToken('');
+        }
       }
     } catch {
       setApiConnected(false);
+      setSubscriptions([]);
+      setInvoices([]);
+      setAuthError('Could not connect to the billing API. Check that the API is running and try refreshing.');
+      setSubscriptions([]);
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchPortalData();
-  }, [fetchPortalData]);
+    if (accessToken) void fetchPortalData(accessToken);
+  }, [accessToken, fetchPortalData]);
+
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? 'Unable to sign in. Check your email and password.');
+      if (result.pending2fa) throw new Error('This account requires a second-factor flow that is not available in the customer portal yet.');
+      if (!result.accessToken) throw new Error('Sign-in did not return an access token.');
+      setAccessToken(result.accessToken);
+      setLoginPassword('');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Unable to sign in.');
+      setLoading(false);
+    }
+  };
+
+  const handlePayInvoice = async (invoice: PortalInvoice) => {
+    if (!accessToken) return;
+    setPayingInvoiceId(invoice.id);
+    try {
+      const orderResponse = await fetch(`${API_URL}/payments/invoices/${invoice.id}/order`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const order = await orderResponse.json();
+      if (!orderResponse.ok) throw new Error(order.message ?? 'Could not start checkout.');
+      if (!window.Razorpay) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Could not load Razorpay Checkout.'));
+          document.body.appendChild(script);
+        });
+      }
+      if (!window.Razorpay) throw new Error('Razorpay Checkout did not initialize.');
+      const checkout = new window.Razorpay({
+        key: order.keyId, amount: order.amount, currency: order.currency, name: 'Brightloop',
+        description: `Invoice ${invoice.number}`, order_id: order.orderId,
+        prefill: { name: order.customerName, email: order.customerEmail }, theme: { color: '#047857' },
+        modal: { ondismiss: () => setPayingInvoiceId(null) },
+        handler: (payment) => {
+          void (async () => {
+            try {
+              const response = await fetch(`${API_URL}/payments/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                body: JSON.stringify(payment),
+              });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.message ?? 'Payment verification failed.');
+              triggerToast(`Payment received for ${invoice.number}.`);
+              await fetchPortalData(accessToken);
+            } catch (error) {
+              triggerToast(error instanceof Error ? error.message : 'Payment verification failed.');
+            } finally {
+              setPayingInvoiceId(null);
+            }
+          })();
+        },
+      });
+      checkout.on('payment.failed', (response) => {
+        triggerToast(response.error?.description ?? 'Payment was not completed. You can try again.');
+        setPayingInvoiceId(null);
+      });
+      checkout.open();
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not start Razorpay Checkout.');
+      setPayingInvoiceId(null);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } finally {
+      setAccessToken('');
+      setApiConnected(false);
+      setInvoices([]);
+      setSubscriptions([]);
+    }
+  };
+
+  const downloadInvoicePdf = async (invoice: PortalInvoice) => {
+    try {
+      const response = await fetch(`${API_URL}/invoices/${invoice.id}/pdf`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) throw new Error('Could not download this invoice.');
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${invoice.number}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not download this invoice.');
+    }
+  };
 
   // Compute portal KPIs
   const activePlanCount = useMemo(
@@ -188,30 +215,49 @@ export default function CustomerPortalPage() {
       .filter((i) => i.isOverdue || (i.status === 'CONFIRMED' && new Date(i.dueDate) < new Date()))
       .reduce((sum, i) => sum + (Number(i.total) - Number(i.amountPaid)), 0);
   }, [invoices]);
+  const nextRenewal = useMemo(() => subscriptions
+    .map((subscription) => subscription.nextBillingDate)
+    .filter((date): date is string => Boolean(date))
+    .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0], [subscriptions]);
 
   const handleConfirmCancel = async () => {
     if (!cancelModalSub) return;
     try {
       const res = await fetch(`${API_URL}/portal/subscriptions/${cancelModalSub.id}/close`, {
         method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (res.ok) {
-        triggerToast(`Subscription ${cancelModalSub.number} successfully cancelled.`);
-      } else {
-        triggerToast(`Cancellation logged for ${cancelModalSub.number}.`);
-      }
-      setSubscriptions((prev) =>
-        prev.map((s) => (s.id === cancelModalSub.id ? { ...s, status: 'CLOSED' } : s))
-      );
-    } catch {
-      triggerToast(`Cancellation updated locally for ${cancelModalSub.number}.`);
-      setSubscriptions((prev) =>
-        prev.map((s) => (s.id === cancelModalSub.id ? { ...s, status: 'CLOSED' } : s))
-      );
+      if (!res.ok) throw new Error('Subscription cancellation is not available through the API yet.');
+      triggerToast(`Subscription ${cancelModalSub.number} successfully cancelled.`);
+      await fetchPortalData(accessToken);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not cancel this subscription.');
     } finally {
       setCancelModalSub(null);
     }
   };
+
+  if (!accessToken) {
+    return (
+      <main className="min-h-screen bg-[#F4F3EF] flex items-center justify-center p-5">
+        <form onSubmit={handleLogin} className={`${BENTO.card} w-full max-w-md p-8 space-y-5`}>
+          <div>
+            <p className="text-xs uppercase tracking-widest text-emerald-800 font-bold">Brightloop Customer Portal</p>
+            <h1 className="text-2xl font-bold mt-2">Sign in to view and pay invoices</h1>
+            <p className="text-sm text-stone-600 mt-2">Use your customer account to securely access your subscriptions and balances.</p>
+          </div>
+          <label className="block text-sm font-semibold">Email
+            <input className="mt-1 w-full rounded-lg border border-stone-300 p-3" type="email" autoComplete="username" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} />
+          </label>
+          <label className="block text-sm font-semibold">Password
+            <input className="mt-1 w-full rounded-lg border border-stone-300 p-3" type="password" autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} />
+          </label>
+          {authError && <p role="alert" className="text-sm text-rose-700">{authError}</p>}
+          <button className={`${BENTO.primaryBtn} w-full`} type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</button>
+        </form>
+      </main>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${BENTO.pageBg}`}>
@@ -233,12 +279,9 @@ export default function CustomerPortalPage() {
             <div>
               <div className="flex items-center gap-2.5">
                 <span className="font-bold text-lg tracking-tight">Brightloop Customer Portal</span>
-                <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-400 font-semibold">
-                  Acme Corporation
-                </span>
               </div>
               <p className="text-xs text-stone-500 font-mono mt-0.5">
-                billing@acme.com • Tax ID: US-TAX-882190
+                Your invoices and subscriptions
               </p>
             </div>
           </div>
@@ -248,6 +291,7 @@ export default function CustomerPortalPage() {
               <ShieldCheck className="w-4 h-4 text-emerald-700" />
               Tenant Data Isolated
             </span>
+            <button onClick={() => void handleSignOut()} className="px-3 py-2 rounded-xl bg-white border-2 border-stone-900/15 text-xs font-semibold">Sign out</button>
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 text-xs font-semibold border-2 border-stone-900/15 transition-all"
@@ -268,7 +312,7 @@ export default function CustomerPortalPage() {
               <Layers className="w-4 h-4 text-emerald-700" />
             </div>
             <p className="text-3xl font-bold font-mono tabular-nums mt-3">{activePlanCount}</p>
-            <p className="text-xs text-stone-600 mt-2">Next renewal on 01 Nov 2026</p>
+              <p className="text-xs text-stone-600 mt-2">{nextRenewal ? `Next renewal ${formatDate(nextRenewal)}` : 'No upcoming renewal date'}</p>
           </div>
 
           <div className={`${BENTO.card} p-7`}>
@@ -295,7 +339,7 @@ export default function CustomerPortalPage() {
               {formatCurrency(balancePastDue)}
             </p>
             <p className="text-xs text-stone-600 mt-2">
-              {balancePastDue > 0 ? 'INV-000004 due 05 Oct 2026' : 'All accounts settled'}
+              {balancePastDue > 0 ? 'Across your overdue invoices' : 'All accounts settled'}
             </p>
           </div>
         </div>
@@ -311,7 +355,7 @@ export default function CustomerPortalPage() {
               </p>
             </div>
             <button
-              onClick={() => void fetchPortalData()}
+              onClick={() => void fetchPortalData(accessToken)}
               disabled={loading}
               className={BENTO.secondaryBtn}
             >
@@ -396,10 +440,12 @@ export default function CustomerPortalPage() {
                   <th className="py-3.5 px-5 text-right">Total</th>
                   <th className="py-3.5 px-5 text-right">Paid</th>
                   <th className="py-3.5 px-5">Status</th>
+                  <th className="py-3.5 px-5 text-right">Payment</th>
                   <th className="py-3.5 px-5 text-right">Receipt</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200 text-sm">
+                  <tbody className="divide-y divide-stone-200 text-sm">
+                {invoices.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-stone-500">{apiConnected ? 'No invoices are available for this account.' : 'Invoice data is unavailable. Check the API connection and refresh.'}</td></tr>}
                 {invoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-stone-50/80 transition-colors">
                     <td className="py-4 px-5 font-mono font-bold">{inv.number}</td>
@@ -419,6 +465,13 @@ export default function CustomerPortalPage() {
                     </td>
                     <td className="py-4 px-5">
                       <StatusBadge status={inv.status} isOverdue={inv.isOverdue} />
+                    </td>
+                    <td className="py-4 px-5 text-right">
+                      {apiConnected && ['CONFIRMED', 'OVERDUE'].includes(inv.status) && Number(inv.total) > Number(inv.amountPaid) && (
+                        <button onClick={() => void handlePayInvoice(inv)} disabled={payingInvoiceId === inv.id} className={BENTO.primaryBtn}>
+                          {payingInvoiceId === inv.id ? 'Opening…' : `Pay ${formatCurrency(Number(inv.total) - Number(inv.amountPaid))}`}
+                        </button>
+                      )}
                     </td>
                     <td className="py-4 px-5 text-right">
                       <button
@@ -458,7 +511,7 @@ export default function CustomerPortalPage() {
             <div className="space-y-3 text-xs font-mono">
               <div className="flex justify-between">
                 <span className="text-stone-500">Billed To:</span>
-                <span className="font-bold">Acme Corporation (US-TAX-882190)</span>
+                <span className="font-bold">Customer account</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-stone-500">Issue / Due Date:</span>
@@ -508,8 +561,7 @@ export default function CustomerPortalPage() {
               </button>
               <button
                 onClick={() => {
-                  triggerToast(`Downloading PDF for ${pdfModalInvoice.number}...`);
-                  window.open(`${API_URL}/invoices/${pdfModalInvoice.id}/pdf`, '_blank');
+                  void downloadInvoicePdf(pdfModalInvoice);
                   setPdfModalInvoice(null);
                 }}
                 className={BENTO.primaryBtn}

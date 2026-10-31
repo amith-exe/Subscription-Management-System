@@ -2,7 +2,7 @@
 
 ## API documentation
 
-When the API is running, Swagger UI is available at `http://localhost:3001/docs` and the OpenAPI JSON document at `http://localhost:3001/docs-json`. The documentation includes the currently implemented invoice and discount endpoints. The API port can be changed with `API_PORT`.
+When the API is running in development, Swagger UI is available at `http://localhost:3001/api/docs` and the OpenAPI JSON document at `http://localhost:3001/api/docs-json`. Swagger documents the payment recording, payment history, invoice payment history, and Razorpay checkout endpoints. The API port can be changed with `API_PORT`.
 
 A modular-monolith subscription and billing platform built with NestJS, Prisma, PostgreSQL, Redis/BullMQ, and Next.js.
 
@@ -24,6 +24,19 @@ npm run dev
 ```
 
 Run the web portal separately with `npm run dev:web`.
+
+## Razorpay invoice payments
+
+Add Razorpay **Test Mode** credentials to the root `.env` before accepting test payments:
+
+```env
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+```
+
+Apply the payment-attempt migration, then run the API and web app. Customers sign in at `/portal`; confirmed invoice balances show a Razorpay checkout button. The checkout callback signature and captured payment status are verified by the API before the invoice is updated.
+
+Never put `RAZORPAY_KEY_SECRET` in browser code or commit real credentials. Use Test Mode credentials for development and separate Live Mode credentials for production.
 
 ## Design rules
 

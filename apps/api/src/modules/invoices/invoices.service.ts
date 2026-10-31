@@ -141,28 +141,41 @@ export class InvoicesService {
         ...(filters.dateFrom && { gte: filters.dateFrom }),
         ...(filters.dateTo && { lte: filters.dateTo }),
       } }),
-      ...(filters.overdue && { status: InvoiceStatus.CONFIRMED, dueDate: { lt: new Date() } }),
+      ...(filters.overdue && { status: { in: [InvoiceStatus.CONFIRMED, InvoiceStatus.OVERDUE] }, dueDate: { lt: new Date() } }),
     };
     const [data, total] = await this.prisma.$transaction([
       this.prisma.invoice.findMany({ where, include: invoiceInclude, orderBy: { number: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.invoice.count({ where }),
     ]);
-    return { data: data.map((invoice) => ({ ...invoice, displayNumber: this.displayNumber(invoice.number) })), total, page, pageSize };
+    return {
+      data: data.map((invoice) => ({
+        ...invoice,
+        outstandingAmount: Prisma.Decimal.max(invoice.total.minus(invoice.amountPaid), 0),
+        displayNumber: this.displayNumber(invoice.number),
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async get(id: string) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id }, include: invoiceInclude });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return { ...invoice, displayNumber: this.displayNumber(invoice.number) };
+    return {
+      ...invoice,
+      outstandingAmount: Prisma.Decimal.max(invoice.total.minus(invoice.amountPaid), 0),
+      displayNumber: this.displayNumber(invoice.number),
+    };
   }
 
   async confirm(id: string) { return this.transition(id, InvoiceStatus.CONFIRMED); }
   async cancel(id: string) { return this.transition(id, InvoiceStatus.CANCELLED); }
 
   async markPaidIfSettled(id: string) {
-    const invoice = await this.prisma.invoice.findUnique({ where: { id }, include: { payments: true } });
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    const settled = invoice.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0)).gte(invoice.total);
+    const settled = invoice.amountPaid.gte(invoice.total);
     if (settled && (invoice.status === InvoiceStatus.CONFIRMED || invoice.status === InvoiceStatus.OVERDUE)) {
       return this.transition(id, InvoiceStatus.PAID);
     }
