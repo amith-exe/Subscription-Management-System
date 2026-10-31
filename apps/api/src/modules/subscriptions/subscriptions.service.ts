@@ -9,7 +9,6 @@ import {
   Subscription,
   SubscriptionStatus,
 } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { TaxesService } from '../taxes/taxes.service';
@@ -24,6 +23,18 @@ import { CreateSubscriptionLineDto } from './dto/create-subscription-line.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SubscriptionFiltersDto } from './dto/subscription-filters.dto';
 
+type CalculatedLine = {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  taxId: string | null;
+  taxRate: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  subtotal: Prisma.Decimal;
+  totalAmount: Prisma.Decimal;
+};
+
 @Injectable()
 export class SubscriptionsService {
   constructor(
@@ -37,7 +48,7 @@ export class SubscriptionsService {
   /**
    * Generates atomic, sequential numbers such as SUB-000123 inside a transaction
    */
-  async generateSequenceNumber(tx: Prisma.TransactionClient): Promise<string> {
+  async generateSequenceNumber(tx: PrismaService): Promise<string> {
     const seq = await tx.sequence.upsert({
       where: { name: 'SUBSCRIPTION' },
       update: { currentValue: { increment: 1 } },
@@ -63,7 +74,7 @@ export class SubscriptionsService {
       throw new BadRequestException('A subscription must have at least one product line item');
     }
 
-    const calculatedLines = [];
+    const calculatedLines: CalculatedLine[] = [];
 
     for (const line of lines) {
       if (line.quantity < planMinQuantity) {
@@ -79,8 +90,8 @@ export class SubscriptionsService {
       );
       const subtotal = unitPrice.mul(line.quantity).toDecimalPlaces(2);
 
-      let taxRate = new Decimal(0);
-      let taxAmount = new Decimal(0);
+      let taxRate = new Prisma.Decimal(0);
+      let taxAmount = new Prisma.Decimal(0);
 
       if (line.taxId) {
         const taxResult = await this.taxesService.calculate(
@@ -427,7 +438,7 @@ export class SubscriptionsService {
    */
   async advanceNextBillingDate(
     subscriptionId: string,
-    tx?: Prisma.TransactionClient,
+    tx?: PrismaService,
   ): Promise<Date> {
     const client = tx ?? this.prisma;
     const sub = await client.subscription.findUnique({
@@ -449,12 +460,24 @@ export class SubscriptionsService {
       case BillingPeriod.WEEKLY:
         nextDate.setDate(nextDate.getDate() + 7);
         break;
-      case BillingPeriod.MONTHLY:
+      case BillingPeriod.MONTHLY: {
+        const anchorDay = sub.startDate.getDate();
+        nextDate.setDate(1);
         nextDate.setMonth(nextDate.getMonth() + 1);
+        const lastDay = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+        nextDate.setDate(Math.min(anchorDay, lastDay));
         break;
-      case BillingPeriod.YEARLY:
+      }
+      case BillingPeriod.YEARLY: {
+        const anchorDay = sub.startDate.getDate();
+        const anchorMonth = sub.startDate.getMonth();
+        nextDate.setDate(1);
         nextDate.setFullYear(nextDate.getFullYear() + 1);
+        nextDate.setMonth(anchorMonth);
+        const lastDay = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+        nextDate.setDate(Math.min(anchorDay, lastDay));
         break;
+      }
     }
 
     await client.subscription.update({

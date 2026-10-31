@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DiscountScope, InvoiceStatus, Prisma, TaxType } from '@prisma/client';
-import { DiscountEngine, DraftInvoiceLine } from '../billing/discount-engine';
+import { DiscountEngine, DraftInvoiceLine, DiscountCandidate } from '../billing/discount-engine';
 import { DiscountsService } from '../discounts/discounts.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -60,7 +60,7 @@ export class InvoicesService {
       amount: line.subtotal,
     }));
     const subtotal = lines.reduce((sum, line) => sum.plus(line.amount), new Prisma.Decimal(0));
-    const candidates = await this.discounts.getApplicable(subscriptionId, period.start);
+    const candidates: DiscountCandidate[] = await this.discounts.getApplicable(subscriptionId, period.start);
     const proposed = DiscountEngine.calculate({ subscriptionId, lines, date: period.start }, candidates);
 
     return this.prisma.$transaction(async (tx) => {
@@ -76,7 +76,7 @@ export class InvoicesService {
         const discount = discountsById.get(applied.discountId);
         if (!discount || applied.amount.lte(0)) continue;
         const eligibleIndexes = subscription.lines.flatMap((line, index) =>
-          discount.appliesTo === DiscountScope.SUBSCRIPTION || discount.products.some((entry) => entry.productId === line.productId) ? [index] : []);
+          discount.appliesTo === DiscountScope.SUBSCRIPTION || (discount.products ?? []).some((entry) => entry.productId === line.productId) ? [index] : []);
         const remaining = eligibleIndexes.map((index) => Prisma.Decimal.max(subscription.lines[index].subtotal.minus(lineDiscounts[index]), 0));
         const eligibleSubtotal = remaining.reduce((sum, amount) => sum.plus(amount), new Prisma.Decimal(0));
         const allocatedTotal = Prisma.Decimal.min(applied.amount, eligibleSubtotal).toDecimalPlaces(4);
@@ -152,7 +152,7 @@ export class InvoicesService {
       } }),
       ...(filters.overdue && { status: { in: [InvoiceStatus.CONFIRMED, InvoiceStatus.OVERDUE] }, dueDate: { lt: new Date() } }),
     };
-    const [data, total] = await this.prisma.$transaction([
+    const [data, total] = await Promise.all([
       this.prisma.invoice.findMany({ where, include: invoiceInclude, orderBy: { number: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.invoice.count({ where }),
     ]);

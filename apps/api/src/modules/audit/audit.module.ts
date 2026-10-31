@@ -7,5 +7,5 @@ export class AuditService {
   public constructor(private readonly prisma: PrismaService) {}
   public async log(entry: AuditEntry): Promise<void> { await this.prisma.auditLog.create({ data: { userId: entry.userId, action: entry.action, entity: entry.entity, entityId: entry.entityId ?? 'system', ipAddress: entry.ipAddress } }); }
 }
-@Module({ providers: [AuditService, PrismaService], exports: [AuditService] })
+@Module({ providers: [PrismaService, AuditService], exports: [AuditService] })
 export class AuditModule {}

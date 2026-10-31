@@ -10,7 +10,7 @@ export const subscriptionTransitions: Record<SubscriptionStatus, readonly Subscr
 
 export const invoiceTransitions: Record<InvoiceStatus, readonly InvoiceStatus[]> = {
   DRAFT: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['PAID', 'CANCELLED'],
+  CONFIRMED: ['PAID', 'CANCELLED', 'OVERDUE'],
   PAID: [],
   CANCELLED: [],
   OVERDUE: ['PAID', 'CANCELLED'],

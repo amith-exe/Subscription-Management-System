@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -63,6 +63,7 @@ const BENTO = {
 };
 
 type WorkspaceRole = 'INTERNAL' | 'FINANCE' | 'ADMIN' | 'CUSTOMER';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 const INITIAL_SUBSCRIPTIONS = [
   {
@@ -281,7 +282,7 @@ function StatusBadge({ status, isOverdue }: { status: string; isOverdue?: boolea
 export default function HomePage() {
   const router = useRouter();
   const [activePersona, setActivePersona] = useState<WorkspaceRole>('INTERNAL');
-  const [currentUser, setCurrentUser] = useState<{ email?: string; role?: string; name?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ email?: string; role?: string; name?: string; token?: string } | null>(null);
 
   // Authenticate session and sync role from URL query param or localStorage
   React.useEffect(() => {
@@ -353,6 +354,60 @@ export default function HomePage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentRef, setPaymentRef] = useState('UPI-99481023');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [apiConnected, setApiConnected] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser?.token) return;
+    const headers = { Authorization: `Bearer ${currentUser.token}` };
+    const loadOperations = async () => {
+      try {
+        const [subscriptionsResponse, invoicesResponse] = await Promise.all([
+          fetch(`${API_URL}/subscriptions?page=1&pageSize=100`, { headers, cache: 'no-store' }),
+          fetch(`${API_URL}/invoices?page=1&pageSize=100`, { headers, cache: 'no-store' }),
+        ]);
+        if (!subscriptionsResponse.ok || !invoicesResponse.ok) throw new Error('Operations data could not be loaded');
+        const subscriptionsPayload = await subscriptionsResponse.json();
+        const invoicesPayload = await invoicesResponse.json();
+        const apiSubscriptions = subscriptionsPayload.data || subscriptionsPayload;
+        const apiInvoices = invoicesPayload.data || invoicesPayload;
+        setSubscriptions(apiSubscriptions.map((subscription: any) => ({
+          id: subscription.id,
+          number: subscription.number,
+          customer: subscription.customer?.company || subscription.customer?.name || 'Unknown customer',
+          plan: subscription.plan?.name || 'Unassigned plan',
+          period: subscription.plan?.billingPeriod || 'MONTHLY',
+          status: subscription.status,
+          startDate: new Date(subscription.startDate).toLocaleDateString('en-GB'),
+          nextBillingDate: subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString('en-GB') : '—',
+          terms: subscription.paymentTerms,
+          productName: subscription.lines?.[0]?.product?.name || 'Subscription',
+          variantLabel: subscription.lines?.[0]?.variant ? `${subscription.lines[0].variant.attribute}: ${subscription.lines[0].variant.value}` : 'Standard',
+          qty: subscription.lines?.reduce((sum: number, line: any) => sum + line.quantity, 0) || 0,
+          unitPrice: Number(subscription.lines?.[0]?.unitPrice || 0),
+          taxAmount: Number(subscription.lines?.reduce((sum: number, line: any) => sum + Number(line.taxAmount || 0), 0) || 0),
+          totalAmount: Number(subscription.lines?.reduce((sum: number, line: any) => sum + Number(line.totalAmount || 0), 0) || 0),
+        })));
+        setInvoices(apiInvoices.map((invoice: any) => ({
+          id: invoice.id,
+          number: invoice.displayNumber || invoice.number,
+          subNumber: invoice.subscription?.number || '—',
+          customer: invoice.customer?.company || invoice.customer?.name || 'Unknown customer',
+          taxId: invoice.customer?.taxId || '—',
+          period: `${new Date(invoice.periodStart).toLocaleDateString('en-GB')} → ${new Date(invoice.periodEnd).toLocaleDateString('en-GB')}`,
+          issueDate: new Date(invoice.issueDate).toLocaleDateString('en-GB'),
+          dueDate: new Date(invoice.dueDate).toLocaleDateString('en-GB'),
+          subtotal: Number(invoice.subtotal), discount: Number(invoice.discountTotal), tax: Number(invoice.taxTotal), total: Number(invoice.total), paid: Number(invoice.amountPaid),
+          status: invoice.status, isOverdue: invoice.status === 'OVERDUE' || (invoice.status === 'CONFIRMED' && new Date(invoice.dueDate) < new Date() && Number(invoice.amountPaid) < Number(invoice.total)),
+          lineDescription: invoice.lines?.[0]?.description || 'Invoice', qty: invoice.lines?.[0]?.quantity || 0, unitPrice: Number(invoice.lines?.[0]?.unitPrice || 0), paymentNote: invoice.amountPaid ? 'Payment recorded' : 'Outstanding',
+        })));
+        setApiConnected(true);
+      } catch {
+        setApiConnected(false);
+        triggerToast('Live operations data is unavailable. Showing the last loaded workspace data.');
+      }
+    };
+    void loadOperations();
+  }, [currentUser?.token]);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -380,21 +435,18 @@ export default function HomePage() {
     });
   }, [invoices, overdueOnly, searchQuery]);
 
-  const handleAdvanceSubscription = (id: string) => {
+  const handleAdvanceSubscription = async (id: string) => {
     const order = ['DRAFT', 'QUOTATION', 'CONFIRMED', 'ACTIVE', 'CLOSED'];
-    setSubscriptions((prev) =>
-      prev.map((sub) => {
-        if (sub.id !== id) return sub;
-        const idx = order.indexOf(sub.status);
-        const nextStatus = idx < order.length - 1 ? order[idx + 1] : sub.status;
-        triggerToast(`Transitioned ${sub.number}: ${sub.status} → ${nextStatus}`);
-        return {
-          ...sub,
-          status: nextStatus,
-          nextBillingDate: nextStatus === 'ACTIVE' ? '01 Dec 2026' : sub.nextBillingDate
-        };
-      })
-    );
+    const subscription = subscriptions.find((item) => item.id === id);
+    if (!subscription || !currentUser?.token) return;
+    const idx = order.indexOf(subscription.status);
+    if (idx < 0 || idx >= order.length - 1) return;
+    const nextStatus = order[idx + 1];
+    const action = nextStatus === 'QUOTATION' ? 'quote' : nextStatus === 'CONFIRMED' ? 'confirm' : nextStatus === 'ACTIVE' ? 'activate' : 'close';
+    const response = await fetch(`${API_URL}/subscriptions/${id}/${action}`, { method: 'POST', headers: { Authorization: `Bearer ${currentUser.token}` } });
+    if (!response.ok) { triggerToast('The subscription transition was rejected by the API.'); return; }
+    setSubscriptions((prev) => prev.map((item) => item.id === id ? { ...item, status: nextStatus } : item));
+    triggerToast(`Transitioned ${subscription.number}: ${subscription.status} → ${nextStatus}`);
   };
 
   const handleOpenPaymentModal = (inv: any) => {
@@ -405,10 +457,12 @@ export default function HomePage() {
     setPaymentRef(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
   };
 
-  const handleRecordPayment = (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentModalInvoice) return;
+    if (!paymentModalInvoice || !currentUser?.token) return;
     const paidInput = parseFloat(paymentAmount) || 0;
+    const response = await fetch(`${API_URL}/payments`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.token}` }, body: JSON.stringify({ invoiceId: paymentModalInvoice.id, amount: paidInput, method: paymentMethod === 'UPI' ? 'OTHER' : paymentMethod, date: new Date().toISOString(), note: paymentRef }) });
+    if (!response.ok) { triggerToast('The payment could not be recorded.'); return; }
     setInvoices((prev) =>
       prev.map((inv) => {
         if (inv.id !== paymentModalInvoice.id) return inv;

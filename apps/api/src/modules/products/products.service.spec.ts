@@ -10,6 +10,10 @@ describe('ProductsService - Pricing Contract', () => {
       product: {
         findUnique: jest.fn(),
       },
+      productVariant: {
+        findFirst: jest.fn(),
+        delete: jest.fn(),
+      },
     };
     service = new ProductsService(mockPrisma);
   });
@@ -44,5 +48,22 @@ describe('ProductsService - Pricing Contract', () => {
 
     const price = await service.getPrice('prod-1');
     expect(price.toString()).toBe('1000');
+  });
+
+  it('throws NotFoundException when removing a variant that does not belong to the product', async () => {
+    mockPrisma.product.findUnique.mockResolvedValue({ id: 'prod-1', variants: [] });
+    mockPrisma.productVariant.findFirst.mockResolvedValue(null);
+
+    await expect(service.removeVariant('prod-1', 'non-existent')).rejects.toThrow('not found');
+  });
+
+  it('deletes variant when it belongs to the product', async () => {
+    mockPrisma.product.findUnique.mockResolvedValue({ id: 'prod-1', variants: [] });
+    mockPrisma.productVariant.findFirst.mockResolvedValue({ id: 'var-1', productId: 'prod-1' });
+    mockPrisma.productVariant.delete.mockResolvedValue({ id: 'var-1' });
+
+    const result = await service.removeVariant('prod-1', 'var-1');
+    expect(mockPrisma.productVariant.delete).toHaveBeenCalledWith({ where: { id: 'var-1' } });
+    expect(result).toEqual({ id: 'var-1' });
   });
 });

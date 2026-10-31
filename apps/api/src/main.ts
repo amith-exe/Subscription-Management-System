@@ -1,8 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import helmet from 'helmet';
+import helmet = require('helmet');
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
+import cookieParser = require('cookie-parser');
+import type { RequestHandler } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { MustChangePasswordGuard } from './common/auth/must-change-password.guard';
@@ -13,7 +14,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
   app.use(cookieParser());
-  app.use(helmet({
+  app.use((helmet as unknown as (options: object) => RequestHandler)({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],

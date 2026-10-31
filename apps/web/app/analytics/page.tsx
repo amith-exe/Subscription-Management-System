@@ -67,11 +67,14 @@ export default function AnalyticsPage() {
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     try {
+      const storedUser = typeof window !== 'undefined' ? localStorage.getItem('brightloop_user') : null;
+      const token = storedUser ? JSON.parse(storedUser).token : '';
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       const [sumRes, mrrRes, agingRes, plansRes] = await Promise.all([
-        fetch(`${API_URL}/analytics/summary`, { cache: 'no-store' }),
-        fetch(`${API_URL}/analytics/mrr-movement`, { cache: 'no-store' }),
-        fetch(`${API_URL}/analytics/aging`, { cache: 'no-store' }),
-        fetch(`${API_URL}/analytics/top-plans`, { cache: 'no-store' }),
+        fetch(`${API_URL}/analytics/summary`, { cache: 'no-store', headers }),
+        fetch(`${API_URL}/analytics/mrr-movement`, { cache: 'no-store', headers }),
+        fetch(`${API_URL}/analytics/aging`, { cache: 'no-store', headers }),
+        fetch(`${API_URL}/analytics/top-plans`, { cache: 'no-store', headers }),
       ]);
 
       if (sumRes.ok && mrrRes.ok && agingRes.ok) {

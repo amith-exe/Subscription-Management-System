@@ -102,7 +102,7 @@ describe('SubscriptionsService - State Machine & Business Rules', () => {
         status: SubscriptionStatus.CONFIRMED,
         startDate,
       });
-      mockPrisma.subscription.update.mockImplementation(({ data }: any) => ({
+      mockPrisma.subscription.update.mockImplementation(({ data }: { data: { status: SubscriptionStatus; nextBillingDate?: Date | null } }) => ({
         id: 'sub-1',
         status: data.status,
         nextBillingDate: data.nextBillingDate,
@@ -149,6 +149,22 @@ describe('SubscriptionsService - State Machine & Business Rules', () => {
 
       const nextDate = await service.advanceNextBillingDate('sub-1');
       expect(nextDate.getMonth()).toBe((initialDate.getMonth() + 1) % 12);
+    });
+
+    it('clamps to the last day of month on month-end subscriptions (e.g. Jan 31 -> Feb 28)', async () => {
+      const startDate = new Date('2026-01-31T00:00:00Z');
+      mockPrisma.subscription.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        nextBillingDate: startDate,
+        startDate: startDate,
+        plan: {
+          billingPeriod: BillingPeriod.MONTHLY,
+        },
+      });
+
+      const nextDate = await service.advanceNextBillingDate('sub-1');
+      expect(nextDate.getMonth()).toBe(1); // February
+      expect(nextDate.getDate()).toBe(28); // 2026 is not a leap year, 28 days
     });
   });
 });
