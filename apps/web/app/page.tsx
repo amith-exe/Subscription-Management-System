@@ -25,7 +25,8 @@ import {
   ChevronRight,
   DollarSign,
   ShieldCheck,
-  Award
+  Award,
+  LogOut
 } from 'lucide-react';
 
 // Deterministic currency formatter to guarantee 0 hydration discrepancy between SSR & Client
@@ -278,6 +279,27 @@ function StatusBadge({ status, isOverdue }: { status: string; isOverdue?: boolea
 
 export default function HomePage() {
   const [activePersona, setActivePersona] = useState<WorkspaceRole>('INTERNAL');
+
+  // Sync role from URL query param or localStorage
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRole = params.get('role') as WorkspaceRole;
+      if (urlRole && ['INTERNAL', 'FINANCE', 'ADMIN', 'CUSTOMER'].includes(urlRole)) {
+        setActivePersona(urlRole);
+      } else {
+        const stored = localStorage.getItem('brightloop_user');
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed.role && ['INTERNAL', 'FINANCE', 'ADMIN', 'CUSTOMER'].includes(parsed.role)) {
+              setActivePersona(parsed.role);
+            }
+          } catch {}
+        }
+      }
+    }
+  }, []);
   const [staffSection, setStaffSection] = useState<'SUBSCRIPTIONS' | 'INVOICES'>('SUBSCRIPTIONS');
   const [subscriptions, setSubscriptions] = useState(INITIAL_SUBSCRIPTIONS);
   const [invoices, setInvoices] = useState(INITIAL_INVOICES);
@@ -514,6 +536,15 @@ export default function HomePage() {
                   <ExternalLink className="w-3.5 h-3.5" /> Open Deep Analytics Tab
                 </Link>
               )}
+
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold border-2 border-stone-900/15 transition-all cursor-pointer"
+                title="Switch User / Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5 text-stone-500" />
+                <span>Sign Out</span>
+              </Link>
             </div>
           </header>
 

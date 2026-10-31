@@ -3,6 +3,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsDateString, IsEnum, IsInt, IsNumberString, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateDiscountDto {
+  @ApiPropertyOptional({ example: 'Summer Launch Discount' })
+  @IsOptional() @IsString() name?: string;
   @ApiProperty({ enum: DiscountType, example: DiscountType.PERCENT })
   @IsEnum(DiscountType) type!: DiscountType;
   @ApiProperty({ example: '15', description: 'Fixed currency amount or percentage, based on type.' })
@@ -26,6 +28,8 @@ export class CreateDiscountDto {
 }
 
 export class UpdateDiscountDto {
+  @ApiPropertyOptional({ example: 'Updated Discount Name' })
+  @IsOptional() @IsString() name?: string;
   @ApiPropertyOptional({ enum: DiscountType })
   @IsOptional() @IsEnum(DiscountType) type?: DiscountType;
   @ApiPropertyOptional({ example: '15' })

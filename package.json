@@ -2,7 +2,10 @@
   "name": "subscription-management-system",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["apps/*", "services/*"],
+  "workspaces": [
+    "apps/*",
+    "services/*"
+  ],
   "scripts": {
     "dev": "docker compose up -d postgres redis && npm run dev --workspace @subscription/api",
     "dev:web": "npm run dev --workspace @subscription/web",
@@ -13,5 +16,12 @@
     "db:migrate": "npm run prisma:migrate --workspace @subscription/api",
     "db:seed": "npm run prisma:seed --workspace @subscription/api"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/nodemailer": "^8.0.2",
+    "@types/passport-local": "^1.0.38"
+  }
 }

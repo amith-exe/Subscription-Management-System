@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DiscountScope, Prisma } from '@prisma/client';
+import { DiscountScope, Prisma, DiscountType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDiscountDto, UpdateDiscountDto } from './discounts.dto';
 
@@ -9,18 +9,23 @@ export class DiscountsService {
 
   async create(input: CreateDiscountDto) {
     this.validateScope(input.appliesTo, input.productIds, input.subscriptionIds);
-    return this.prisma.discount.create({ data: {
-      type: input.type,
-      value: new Prisma.Decimal(input.value),
-      minPurchase: input.minPurchase === undefined ? null : new Prisma.Decimal(input.minPurchase),
-      minQuantity: input.minQuantity ?? null,
-      startDate: new Date(input.startDate),
-      endDate: input.endDate ? new Date(input.endDate) : null,
-      usageLimit: input.usageLimit ?? null,
-      appliesTo: input.appliesTo,
-      products: { create: (input.productIds ?? []).map((productId) => ({ product: { connect: { id: productId } } })) },
-      subscriptions: { create: (input.subscriptionIds ?? []).map((subscriptionId) => ({ subscription: { connect: { id: subscriptionId } } })) },
-    }, include: { products: true, subscriptions: true } });
+    const defaultName = input.type === DiscountType.PERCENT ? `${input.value}% Off` : `₹${input.value} Off`;
+    return this.prisma.discount.create({
+      data: {
+        name: input.name ?? defaultName,
+        type: input.type,
+        value: new Prisma.Decimal(input.value),
+        minPurchase: input.minPurchase === undefined ? null : new Prisma.Decimal(input.minPurchase),
+        minQuantity: input.minQuantity ?? null,
+        startDate: new Date(input.startDate),
+        endDate: input.endDate ? new Date(input.endDate) : null,
+        usageLimit: input.usageLimit ?? null,
+        appliesTo: input.appliesTo,
+        products: { create: (input.productIds ?? []).map((productId) => ({ product: { connect: { id: productId } } })) },
+        subscriptions: { create: (input.subscriptionIds ?? []).map((subscriptionId) => ({ subscription: { connect: { id: subscriptionId } } })) },
+      },
+      include: { products: true, subscriptions: true },
+    });
   }
 
   list() {
@@ -35,6 +40,7 @@ export class DiscountsService {
       this.validateScope(appliesTo, input.productIds, input.subscriptionIds);
     }
     const data: Prisma.DiscountUpdateInput = {
+      ...(input.name !== undefined && { name: input.name }),
       ...(input.type !== undefined && { type: input.type }),
       ...(input.value !== undefined && { value: new Prisma.Decimal(input.value) }),
       ...(input.minPurchase !== undefined && { minPurchase: input.minPurchase === null ? null : new Prisma.Decimal(input.minPurchase) }),
