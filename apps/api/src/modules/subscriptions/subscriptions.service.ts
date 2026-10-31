@@ -27,12 +27,12 @@ type CalculatedLine = {
   productId: string;
   variantId: string | null;
   quantity: number;
-  unitPrice: Decimal;
+  unitPrice: Prisma.Decimal;
   taxId: string | null;
-  taxRate: Decimal;
-  taxAmount: Decimal;
-  subtotal: Decimal;
-  totalAmount: Decimal;
+  taxRate: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  subtotal: Prisma.Decimal;
+  totalAmount: Prisma.Decimal;
 };
 
 @Injectable()
