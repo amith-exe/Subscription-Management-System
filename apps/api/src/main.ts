@@ -10,14 +10,16 @@ import { RolesGuard } from './common/auth/roles.guard';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
   app.use(cookieParser());
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", 'https://checkout.razorpay.com', 'https://*.razorpay.com'],
+        connectSrc: ["'self'", 'https://api.razorpay.com', 'https://*.razorpay.com'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://*.razorpay.com'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
         upgradeInsecureRequests: null,
