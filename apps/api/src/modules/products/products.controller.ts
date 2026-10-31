@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,8 @@ import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { AuthenticatedUser } from '../auth/auth.types';
 
 @ApiTags('products')
 @ApiBearerAuth()
@@ -76,6 +79,7 @@ export class ProductsController {
     description: 'Paginated product records with variants',
   })
   findAll(
+    @CurrentUser() user: AuthenticatedUser,
     @Query('type') type?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -84,6 +88,7 @@ export class ProductsController {
       type,
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 20,
+      user.role === Role.ADMIN,
     );
   }
 
@@ -95,8 +100,10 @@ export class ProductsController {
     status: HttpStatus.NOT_FOUND,
     description: 'Product not found',
   })
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const product = await this.productsService.findOne(id);
+    if (user.role !== Role.ADMIN && !product.isActive) throw new NotFoundException('Product not found');
+    return product;
   }
 
   @Patch(':id')

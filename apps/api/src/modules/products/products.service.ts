@@ -17,14 +17,13 @@ export class ProductsService {
         salesPrice: new Decimal(dto.salesPrice),
         costPrice: new Decimal(dto.costPrice),
         notes: dto.notes,
-        isActive: dto.isActive ?? true,
       },
     });
   }
 
-  async findAll(type?: string, page = 1, limit = 20) {
+  async findAll(type?: string, page = 1, limit = 20, includeInactive = false) {
     const skip = (page - 1) * limit;
-    const where = type ? { type, isActive: true } : { isActive: true };
+    const where = { ...(type ? { type } : {}), ...(!includeInactive && { isActive: true }) };
 
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({

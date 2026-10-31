@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { resolve } from 'path';
 import { envValidationSchema } from './config/env.validation';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaService } from './prisma/prisma.service';
@@ -15,6 +16,7 @@ import { PortalModule } from './modules/portal/portal.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { TaxesModule } from './modules/taxes/taxes.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
 import { MailModule } from './modules/mail/mail.module';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
@@ -22,7 +24,7 @@ import { MustChangePasswordGuard } from './common/auth/must-change-password.guar
 import { RolesGuard } from './common/auth/roles.guard';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['apps/api/.env', '.env'], validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env'), resolve(process.cwd(), 'apps/api/.env')], validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule, TaxesModule],
   providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard],
   exports: [PrismaService],
 })

@@ -5,6 +5,8 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { CreateDiscountDto, UpdateDiscountDto } from './discounts.dto';
 import { DiscountsService } from './discounts.service';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { AuthenticatedUser } from '../auth/auth.types';
 
 @Controller('discounts')
 @UseGuards(RolesGuard)
@@ -22,7 +24,7 @@ export class DiscountsController {
   @Get()
   @ApiOperation({ summary: 'List discounts' })
   @ApiResponse({ status: 200, description: 'Discounts with their scopes.' })
-  list() { return this.discounts.list(); }
+  list(@CurrentUser() user: AuthenticatedUser) { return this.discounts.list(user.role === Role.CUSTOMER); }
 
   @Patch(':id')
   @Roles(Role.ADMIN)

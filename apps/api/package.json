@@ -7,10 +7,10 @@
     "dev": "nest start --watch",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:studio": "prisma studio"
+    "prisma:generate": "node --env-file=../../.env ../../node_modules/prisma/build/index.js generate",
+    "prisma:migrate": "node --env-file=../../.env ../../node_modules/prisma/build/index.js migrate dev",
+    "prisma:seed": "node --env-file=../../.env --import tsx prisma/seed.ts",
+    "prisma:studio": "node --env-file=../../.env ../../node_modules/prisma/build/index.js studio"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.2",

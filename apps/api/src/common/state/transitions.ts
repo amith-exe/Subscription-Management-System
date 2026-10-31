@@ -13,7 +13,7 @@ export const invoiceTransitions: Record<InvoiceStatus, readonly InvoiceStatus[]>
   CONFIRMED: ['PAID', 'CANCELLED'],
   PAID: [],
   CANCELLED: [],
-  OVERDUE: ['PAID', 'CANCELLED'],
+  OVERDUE: [],
 };
 
 export function canTransition<T extends string>(map: Record<T, readonly T[]>, from: T, to: T): boolean {

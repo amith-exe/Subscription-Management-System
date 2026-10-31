@@ -57,7 +57,7 @@ export class InvoicesService {
     const lines: DraftInvoiceLine[] = subscription.lines.map((line) => ({
       productId: line.productId,
       quantity: line.quantity,
-      amount: line.amount,
+      amount: line.subtotal,
     }));
     const subtotal = lines.reduce((sum, line) => sum.plus(line.amount), new Prisma.Decimal(0));
     const candidates = await this.discounts.getApplicable(subscriptionId, period.start);
@@ -77,7 +77,7 @@ export class InvoicesService {
         if (!discount || applied.amount.lte(0)) continue;
         const eligibleIndexes = subscription.lines.flatMap((line, index) =>
           discount.appliesTo === DiscountScope.SUBSCRIPTION || discount.products.some((entry) => entry.productId === line.productId) ? [index] : []);
-        const remaining = eligibleIndexes.map((index) => Prisma.Decimal.max(subscription.lines[index].amount.minus(lineDiscounts[index]), 0));
+        const remaining = eligibleIndexes.map((index) => Prisma.Decimal.max(subscription.lines[index].subtotal.minus(lineDiscounts[index]), 0));
         const eligibleSubtotal = remaining.reduce((sum, amount) => sum.plus(amount), new Prisma.Decimal(0));
         const allocatedTotal = Prisma.Decimal.min(applied.amount, eligibleSubtotal).toDecimalPlaces(4);
         let allocated = new Prisma.Decimal(0);
@@ -92,21 +92,24 @@ export class InvoicesService {
 
       const invoiceLines = subscription.lines.map((line, index) => {
         const lineDiscount = lineDiscounts[index];
-        const taxableAmount = Prisma.Decimal.max(line.amount.minus(lineDiscount), 0);
+        const taxableAmount = Prisma.Decimal.max(line.subtotal.minus(lineDiscount), 0);
+        const taxRate = line.tax ? line.tax.rate : line.taxRate;
         const taxAmount = line.tax
           ? line.tax.type === TaxType.PERCENTAGE
-            ? taxableAmount.mul(line.tax.rate).div(100).toDecimalPlaces(4)
-            : line.tax.rate.mul(line.quantity).toDecimalPlaces(4)
-          : new Prisma.Decimal(0);
+            ? taxableAmount.mul(taxRate).div(100).toDecimalPlaces(4)
+            : taxRate.mul(line.quantity).toDecimalPlaces(4)
+          : taxableAmount.mul(taxRate).div(100).toDecimalPlaces(4);
         const variant = line.variant ? ` (${line.variant.attribute}: ${line.variant.value})` : '';
         return {
           productId: line.productId,
           description: `${line.product.name}${variant}`,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
-          discountAmount: lineDiscount,
+          subtotal: line.subtotal,
+          taxRate,
           taxAmount,
-          amount: taxableAmount.plus(taxAmount).toDecimalPlaces(4),
+          discountAmount: lineDiscount,
+          totalAmount: taxableAmount.plus(taxAmount).toDecimalPlaces(4),
         };
       });
       const roundedDiscount = lineDiscounts.reduce((sum, amount) => sum.plus(amount), new Prisma.Decimal(0)).toDecimalPlaces(4);
@@ -116,7 +119,15 @@ export class InvoicesService {
       const netDays = subscription.paymentTerms.match(/\d+/)?.[0];
       if (netDays) dueDate.setDate(dueDate.getDate() + Number(netDays));
 
+      const seq = await tx.sequence.upsert({
+        where: { name: 'INVOICE' },
+        update: { currentValue: { increment: 1 } },
+        create: { name: 'INVOICE', prefix: 'INV-', padding: 6, currentValue: 1 },
+      });
+      const number = `${seq.prefix}${String(seq.currentValue).padStart(seq.padding, '0')}`;
+
       return tx.invoice.create({ data: {
+        number,
         subscriptionId,
         customerId: subscription.customerId,
         periodStart: period.start,
@@ -150,8 +161,8 @@ export class InvoicesService {
     return { data: data.map((invoice) => ({ ...invoice, displayNumber: this.displayNumber(invoice.number) })), total, page, pageSize };
   }
 
-  async get(id: string) {
-    const invoice = await this.prisma.invoice.findUnique({ where: { id }, include: invoiceInclude });
+  async get(id: string, customerId?: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, ...(customerId && { customerId }) }, include: invoiceInclude });
     if (!invoice) throw new NotFoundException('Invoice not found');
     return { ...invoice, displayNumber: this.displayNumber(invoice.number) };
   }
@@ -163,7 +174,7 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({ where: { id }, include: { payments: true } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     const settled = invoice.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0)).gte(invoice.total);
-    if (settled && (invoice.status === InvoiceStatus.CONFIRMED || invoice.status === InvoiceStatus.OVERDUE)) {
+    if (settled && invoice.status === InvoiceStatus.CONFIRMED) {
       return this.transition(id, InvoiceStatus.PAID);
     }
     return invoice;
@@ -176,8 +187,8 @@ export class InvoicesService {
     await this.notifications.sendInvoice(invoice.customer.user.email, invoice.displayNumber, pdf);
   }
 
-  async pdf(id: string) {
-    const invoice = await this.get(id);
+  async pdf(id: string, customerId?: string) {
+    const invoice = await this.get(id, customerId);
     return { number: invoice.displayNumber, pdf: await this.renderPdf(invoice) };
   }
 
@@ -192,7 +203,9 @@ export class InvoicesService {
     return this.get(id);
   }
 
-  private displayNumber(number: number) { return `INV-${String(number).padStart(6, '0')}`; }
+  private displayNumber(number: string | number) {
+    return typeof number === 'number' ? `INV-${String(number).padStart(6, '0')}` : number;
+  }
 
   private async renderPdf(invoice: Awaited<ReturnType<InvoicesService['get']>>) {
     const PdfDocumentConstructor = require('pdfkit') as PdfKitConstructor;
@@ -207,7 +220,7 @@ export class InvoicesService {
       document.text(`Period: ${invoice.periodStart.toISOString().slice(0, 10)} to ${invoice.periodEnd.toISOString().slice(0, 10)}`);
       document.text(`Due: ${invoice.dueDate.toISOString().slice(0, 10)}`).moveDown();
       for (const line of invoice.lines) {
-        document.text(`${line.description} | ${line.quantity} × ${line.unitPrice.toFixed(2)} | ${line.amount.toFixed(2)}`);
+        document.text(`${line.description} | ${line.quantity} × ${line.unitPrice.toFixed(2)} | ${line.totalAmount.toFixed(2)}`);
       }
       document.moveDown().text(`Subtotal: ${invoice.subtotal.toFixed(2)}`);
       document.text(`Discount: ${invoice.discountTotal.toFixed(2)}`);

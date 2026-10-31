@@ -8,7 +8,7 @@ export class CreateVariantDto {
   })
   @IsString()
   @IsNotEmpty()
-  attribute: string;
+  attribute!: string;
 
   @ApiProperty({
     description: 'Variant attribute value',
@@ -16,7 +16,7 @@ export class CreateVariantDto {
   })
   @IsString()
   @IsNotEmpty()
-  value: string;
+  value!: string;
 
   @ApiProperty({
     description: 'Extra price added to base product sales price (Decimal string)',
@@ -24,5 +24,5 @@ export class CreateVariantDto {
   })
   @IsNumberString()
   @IsNotEmpty()
-  extraPrice: string;
+  extraPrice!: string;
 }

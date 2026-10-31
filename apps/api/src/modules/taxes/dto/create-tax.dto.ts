@@ -15,7 +15,7 @@ export class CreateTaxDto {
   })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty({
     description: 'Tax rate (0 to 100 for percentage, or fixed monetary amount)',
@@ -23,7 +23,7 @@ export class CreateTaxDto {
   })
   @IsNumberString()
   @IsNotEmpty()
-  rate: string;
+  rate!: string;
 
   @ApiPropertyOptional({
     description: 'Type of tax calculation (PERCENTAGE or FIXED)',

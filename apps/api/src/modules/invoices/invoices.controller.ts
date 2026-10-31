@@ -1,8 +1,12 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { InvoiceStatus } from '@prisma/client';
+import { InvoiceStatus, Role } from '@prisma/client';
 import type { Response } from 'express';
 import { InvoicesService } from './invoices.service';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { AuthenticatedUser } from '../auth/auth.types';
+import { Roles } from '../../common/auth/roles.decorator';
+import { RolesGuard } from '../../common/auth/roles.guard';
 
 @Controller('invoices')
 @ApiTags('Invoices')
@@ -19,10 +23,11 @@ export class InvoicesController {
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'pageSize', required: false, type: Number, example: 20, maximum: 100 })
   @ApiResponse({ status: 200, description: 'Paginated invoice results.' })
-  list(@Query() query: Record<string, string | undefined>) {
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: Record<string, string | undefined>) {
+    if (user.role === Role.CUSTOMER && !user.customerId) throw new ForbiddenException('Customer account is not linked to a customer record');
     return this.invoices.list({
       status: query.status as InvoiceStatus | undefined,
-      customerId: query.customerId,
+      customerId: user.role === Role.CUSTOMER ? user.customerId! : query.customerId,
       overdue: query.overdue === 'true',
       dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
@@ -36,9 +41,14 @@ export class InvoicesController {
   @ApiParam({ name: 'id', type: String, description: 'Invoice UUID.' })
   @ApiResponse({ status: 200, description: 'Invoice details, lines, and payments.' })
   @ApiResponse({ status: 404, description: 'Invoice not found.' })
-  get(@Param('id', ParseUUIDPipe) id: string) { return this.invoices.get(id); }
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    if (user.role === Role.CUSTOMER && !user.customerId) throw new ForbiddenException('Customer account is not linked to a customer record');
+    return this.invoices.get(id, user.role === Role.CUSTOMER ? user.customerId! : undefined);
+  }
 
   @Post(':id/confirm')
+  @Roles(Role.ADMIN, Role.INTERNAL)
+  @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Confirm a draft invoice' })
   @ApiParam({ name: 'id', type: String, description: 'Invoice UUID.' })
   @ApiResponse({ status: 200, description: 'Invoice confirmed.' })
@@ -46,6 +56,8 @@ export class InvoicesController {
   confirm(@Param('id', ParseUUIDPipe) id: string) { return this.invoices.confirm(id); }
 
   @Post(':id/cancel')
+  @Roles(Role.ADMIN, Role.INTERNAL)
+  @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Cancel an invoice' })
   @ApiParam({ name: 'id', type: String, description: 'Invoice UUID.' })
   @ApiResponse({ status: 200, description: 'Invoice cancelled.' })
@@ -53,6 +65,8 @@ export class InvoicesController {
   cancel(@Param('id', ParseUUIDPipe) id: string) { return this.invoices.cancel(id); }
 
   @Post(':id/send')
+  @Roles(Role.ADMIN, Role.INTERNAL)
+  @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Email a confirmed invoice PDF to its customer' })
   @ApiParam({ name: 'id', type: String, description: 'Invoice UUID.' })
   @ApiResponse({ status: 201, description: 'Invoice email sent.' })
@@ -67,8 +81,9 @@ export class InvoicesController {
   @ApiParam({ name: 'id', type: String, description: 'Invoice UUID.' })
   @ApiProduces('application/pdf')
   @ApiResponse({ status: 200, description: 'Invoice PDF document.', schema: { type: 'string', format: 'binary' } })
-  async pdf(@Param('id', ParseUUIDPipe) id: string, @Res() response: Response) {
-    const { number, pdf } = await this.invoices.pdf(id);
+  async pdf(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser, @Res() response: Response) {
+    if (user.role === Role.CUSTOMER && !user.customerId) throw new ForbiddenException('Customer account is not linked to a customer record');
+    const { number, pdf } = await this.invoices.pdf(id, user.role === Role.CUSTOMER ? user.customerId! : undefined);
     response.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${number}.pdf"` });
     response.send(pdf);
   }
