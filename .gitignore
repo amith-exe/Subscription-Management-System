@@ -9,3 +9,5 @@ coverage/
 .prisma/
 __pycache__/
 .venv/
+*.tsbuildinfo
+
