@@ -112,7 +112,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className={`min-h-screen ${BENTO.pageBg}`}>
-      {/* Swiss Neo-Bento Header */}
+      {/* Analytics Header */}
       <header className={`${BENTO.headerBg} px-8 lg:px-10 py-5 sticky top-0 z-40`}>
         <div className="max-w-[1360px] mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">

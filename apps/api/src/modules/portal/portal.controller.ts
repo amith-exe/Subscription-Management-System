@@ -1,88 +1,202 @@
-import { Controller, ForbiddenException, Get } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { InvoiceStatus, Prisma } from '@prisma/client';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  UseGuards,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PortalService } from './portal.service';
+import {
+  CloseSubscriptionResponseDto,
+  PortalInvoiceResponseDto,
+  PortalSubscriptionResponseDto,
+} from './dto/portal.dto';
 
-@ApiTags('customer portal')
+@ApiTags('portal')
 @ApiBearerAuth('access-token')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.CUSTOMER, Role.ADMIN)
 @Controller('portal')
 export class PortalController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly portalService: PortalService) {}
 
-  @Get('invoices')
-  @ApiOperation({ summary: 'List invoices belonging to the signed-in customer' })
-  async invoices(@CurrentUser() user: AuthenticatedUser) {
-    const customerId = this.customerId(user);
-    const invoices = await this.prisma.invoice.findMany({
-      where: { customerId },
-      include: { lines: true, payments: true },
-      orderBy: { issueDate: 'desc' },
-    });
-    return invoices.map((invoice) => ({
-      id: invoice.id,
-      number: `INV-${String(invoice.number).padStart(6, '0')}`,
-      subscriptionId: invoice.subscriptionId,
-      status: invoice.status,
-      isOverdue: invoice.status === InvoiceStatus.OVERDUE || (invoice.status === InvoiceStatus.CONFIRMED && invoice.dueDate < new Date()),
-      issueDate: invoice.issueDate,
-      dueDate: invoice.dueDate,
-      subtotal: invoice.subtotal,
-      discountTotal: invoice.discountTotal,
-      taxTotal: invoice.taxTotal,
-      total: invoice.total,
-      amountPaid: invoice.amountPaid,
-      lines: invoice.lines.map((line) => ({
-        id: line.id,
-        description: line.description,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        discountAmount: line.discountAmount,
-        taxAmount: line.taxAmount,
-        amount: line.totalAmount,
-      })),
-    }));
+  /**
+   * Helper to resolve customer ID securely.
+   * If user is CUSTOMER: strictly forces customerId from authenticated session.
+   * If user is ADMIN: can optionally impersonate via ?customerId= query param.
+   */
+  private resolveCustomerId(user: AuthenticatedUser, queryCustomerId?: string): string {
+    if (user.role === Role.CUSTOMER) {
+      if (!user.customerId) {
+        throw new ForbiddenException('Authenticated user does not have a linked customer profile');
+      }
+      return user.customerId;
+    }
+
+    // Role is ADMIN
+    if (queryCustomerId && queryCustomerId.trim() !== '') {
+      return queryCustomerId.trim();
+    }
+
+    if (user.customerId) {
+      return user.customerId;
+    }
+
+    throw new BadRequestException(
+      'Admin request requires a target customerId query parameter (e.g. ?customerId=<uuid>)',
+    );
   }
 
   @Get('subscriptions')
-  @ApiOperation({ summary: 'List subscriptions belonging to the signed-in customer' })
-  async subscriptions(@CurrentUser() user: AuthenticatedUser) {
-    const customerId = this.customerId(user);
-    const subscriptions = await this.prisma.subscription.findMany({
-      where: { customerId },
-      include: { plan: true, lines: { include: { product: true, variant: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    return subscriptions.map((subscription) => ({
-      id: subscription.id,
-      number: subscription.number,
-      status: subscription.status,
-      planName: subscription.plan.name,
-      billingPeriod: subscription.plan.billingPeriod,
-      startDate: subscription.startDate,
-      expiryDate: subscription.expiryDate,
-      nextBillingDate: subscription.nextBillingDate,
-      allowEarlyClose: subscription.plan.allowEarlyClose,
-      allowPause: subscription.plan.allowPause,
-      allowRenew: subscription.plan.allowRenew,
-      totalAmount: subscription.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Prisma.Decimal(0)),
-      lines: subscription.lines.map((line) => ({
-        id: line.id,
-        productId: line.productId,
-        productName: line.product.name,
-        variantId: line.variantId,
-        variantName: line.variant ? `${line.variant.attribute}: ${line.variant.value}` : null,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        amount: line.subtotal,
-        taxAmount: line.taxAmount,
-      })),
-    }));
+  @ApiOperation({
+    summary: 'List customer subscriptions',
+    description:
+      'Fetches all active and past subscriptions belonging to the authenticated customer. Strictly isolates tenant data.',
+  })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of customer subscriptions with line items and plan rules',
+    type: [PortalSubscriptionResponseDto],
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized JWT access token' })
+  @ApiResponse({ status: 403, description: 'Forbidden (Not a Customer or Admin)' })
+  async getSubscriptions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('customerId') queryCustomerId?: string,
+  ): Promise<PortalSubscriptionResponseDto[]> {
+    const customerId = this.resolveCustomerId(user, queryCustomerId);
+    return this.portalService.getSubscriptions(customerId);
   }
 
-  private customerId(user: AuthenticatedUser) {
-    if (!user.customerId) throw new ForbiddenException('Customer account required');
-    return user.customerId;
+  @Get('subscriptions/:id')
+  @ApiOperation({
+    summary: 'Get subscription details',
+    description:
+      'Fetches single subscription details by ID. Enforces tenant boundary: returns 404 if subscription belongs to another tenant.',
+  })
+  @ApiParam({ name: 'id', description: 'Subscription UUID' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({ status: 200, type: PortalSubscriptionResponseDto })
+  @ApiResponse({ status: 404, description: 'Subscription not found or belongs to another tenant' })
+  async getSubscription(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query('customerId') queryCustomerId?: string,
+  ): Promise<PortalSubscriptionResponseDto> {
+    const customerId = this.resolveCustomerId(user, queryCustomerId);
+    return this.portalService.getSubscription(customerId, id);
+  }
+
+  @Get('invoices')
+  @ApiOperation({
+    summary: 'List customer invoices',
+    description: 'Lists all historical and overdue invoices for the authenticated tenant.',
+  })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({ status: 200, type: [PortalInvoiceResponseDto] })
+  async getInvoices(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('customerId') queryCustomerId?: string,
+  ): Promise<PortalInvoiceResponseDto[]> {
+    const customerId = this.resolveCustomerId(user, queryCustomerId);
+    return this.portalService.getInvoices(customerId);
+  }
+
+  @Get('invoices/:id')
+  @ApiOperation({
+    summary: 'Get invoice details',
+    description:
+      'Fetches details of a specific invoice. Enforces tenant isolation (404 if cross-tenant).',
+  })
+  @ApiParam({ name: 'id', description: 'Invoice UUID' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({ status: 200, type: PortalInvoiceResponseDto })
+  @ApiResponse({ status: 404, description: 'Invoice not found or belongs to another tenant' })
+  async getInvoice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query('customerId') queryCustomerId?: string,
+  ): Promise<PortalInvoiceResponseDto> {
+    const customerId = this.resolveCustomerId(user, queryCustomerId);
+    return this.portalService.getInvoice(customerId, id);
+  }
+
+  @Get('invoices/:id/pdf')
+  @ApiOperation({
+    summary: 'Download / view official invoice PDF metadata',
+    description: 'Provides official invoice receipt and PDF download payload for self-service billing.',
+  })
+  @ApiParam({ name: 'id', description: 'Invoice UUID' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({ status: 200, description: 'PDF metadata and printable invoice object' })
+  async getInvoicePdf(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query('customerId') queryCustomerId?: string,
+  ) {
+    const customerId = this.resolveCustomerId(user, queryCustomerId);
+    return this.portalService.getInvoicePdf(customerId, id);
+  }
+
+  @Post('subscriptions/:id/close')
+  @ApiOperation({
+    summary: 'Early closure of subscription by customer',
+    description:
+      'Allows customer to close an active subscription early ONLY if the underlying Plan policy flag `allowEarlyClose` is true. Throws 400 Bad Request if disabled.',
+  })
+  @ApiParam({ name: 'id', description: 'Subscription UUID to close' })
+  @ApiQuery({
+    name: 'customerId',
+    required: false,
+    description: 'Target customer ID (Allowed for ADMIN only)',
+  })
+  @ApiResponse({ status: 200, type: CloseSubscriptionResponseDto })
+  @ApiResponse({ status: 400, description: 'Plan policy does not permit early closure' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async closeSubscription(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query('customerId') queryCustomerId?: string,
+  ): Promise<CloseSubscriptionResponseDto> {
+    const customerId = this.resolveCustomerId(user, queryCustomerId);
+    return this.portalService.closeSubscription(customerId, id);
   }
 }

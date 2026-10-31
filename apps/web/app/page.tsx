@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Layers,
   FileText,
@@ -25,7 +26,8 @@ import {
   ChevronRight,
   DollarSign,
   ShieldCheck,
-  Award
+  Award,
+  LogOut
 } from 'lucide-react';
 
 // Deterministic currency formatter to guarantee 0 hydration discrepancy between SSR & Client
@@ -277,7 +279,60 @@ function StatusBadge({ status, isOverdue }: { status: string; isOverdue?: boolea
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [activePersona, setActivePersona] = useState<WorkspaceRole>('INTERNAL');
+  const [currentUser, setCurrentUser] = useState<{ email?: string; role?: string; name?: string } | null>(null);
+
+  // Authenticate session and sync role from URL query param or localStorage
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRole = params.get('role') as WorkspaceRole;
+      const stored = localStorage.getItem('brightloop_user');
+
+      if (!stored && !urlRole) {
+        // Unauthenticated visitor -> redirect to login
+        router.push('/login');
+        return;
+      }
+
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setCurrentUser(parsed);
+          if (parsed.role === 'CUSTOMER') {
+            router.push('/portal');
+            return;
+          }
+        } catch {
+          router.push('/login');
+          return;
+        }
+      }
+
+      if (urlRole && ['INTERNAL', 'FINANCE', 'ADMIN', 'CUSTOMER'].includes(urlRole)) {
+        if (urlRole === 'CUSTOMER') {
+          router.push('/portal');
+          return;
+        }
+        setActivePersona(urlRole);
+      } else if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.role && ['INTERNAL', 'FINANCE', 'ADMIN'].includes(parsed.role)) {
+            setActivePersona(parsed.role);
+          }
+        } catch {}
+      }
+    }
+  }, [router]);
+
+  const handleSignOut = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brightloop_user');
+    }
+    router.push('/login');
+  };
   const [staffSection, setStaffSection] = useState<'SUBSCRIPTIONS' | 'INVOICES'>('SUBSCRIPTIONS');
   const [subscriptions, setSubscriptions] = useState(INITIAL_SUBSCRIPTIONS);
   const [invoices, setInvoices] = useState(INITIAL_INVOICES);
@@ -411,57 +466,75 @@ export default function HomePage() {
               </div>
               <div>
                 <h1 className="font-bold tracking-tight text-base text-stone-950">Brightloop ERP</h1>
-                <p className="text-[11px] font-mono text-stone-600">Swiss Neo-Bento UI</p>
+                <p className="text-[11px] font-mono text-stone-600">Enterprise Edition</p>
               </div>
             </div>
 
-            {/* Role Workspaces Navigation */}
+            {/* Workspaces Navigation */}
             <div className="space-y-1.5">
               <p className="px-3 text-[11px] font-mono uppercase tracking-wider text-stone-500 mb-2 font-bold">
-                ROLE WORKSPACES
+                WORKSPACES
               </p>
               {[
                 { icon: Layers, label: 'Staff Operations', id: 'INTERNAL' as WorkspaceRole },
                 { icon: BarChart3, label: 'Finance & MRR', id: 'FINANCE' as WorkspaceRole },
                 { icon: Package, label: 'Admin Governance', id: 'ADMIN' as WorkspaceRole },
                 { icon: Building2, label: 'Customer Portal', id: 'CUSTOMER' as WorkspaceRole }
-              ].map((nav) => {
-                const isActive = activePersona === nav.id;
-                const Icon = nav.icon;
-                return (
-                  <button
-                    key={nav.id}
-                    type="button"
-                    onClick={() => {
-                      setActivePersona(nav.id);
-                      setSearchQuery('');
-                    }}
-                    className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-white text-stone-950 border-2 border-stone-900/20 shadow-[2px_2px_0px_rgba(28,25,23,0.08)]'
-                        : 'text-stone-700 hover:bg-stone-300/50'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-700' : 'text-stone-600'}`} />
-                    <span>{nav.label}</span>
-                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-700 ml-auto" />}
-                  </button>
-                );
-              })}
+              ]
+                .filter((nav) => {
+                  // Role enforcement from requirements PDF:
+                  // Staff (INTERNAL) is restricted from Admin Governance
+                  if (currentUser?.role === 'INTERNAL' && nav.id === 'ADMIN') return false;
+                  return true;
+                })
+                .map((nav) => {
+                  const isActive = activePersona === nav.id;
+                  const Icon = nav.icon;
+                  return (
+                    <button
+                      key={nav.id}
+                      type="button"
+                      onClick={() => {
+                        setActivePersona(nav.id);
+                        setSearchQuery('');
+                      }}
+                      className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-white text-stone-950 border-2 border-stone-900/20 shadow-[2px_2px_0px_rgba(28,25,23,0.08)]'
+                          : 'text-stone-700 hover:bg-stone-300/50'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-700' : 'text-stone-600'}`} />
+                      <span>{nav.label}</span>
+                      {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-700 ml-auto" />}
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
-          {/* Clean Enterprise Footer (Production Grade) */}
-          <div className="pt-6 border-t border-stone-300/60 space-y-2 font-mono text-[11px] text-stone-600">
-            <div className="flex items-center justify-between">
-              <span>DB: PostgreSQL 16</span>
+          {/* User Session & System Status */}
+          <div className="pt-6 border-t border-stone-300/60 space-y-3 font-mono text-[11px] text-stone-600">
+            <div className="p-2.5 rounded-lg bg-stone-200/60 border border-stone-300/80">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-stone-900 truncate">
+                  {currentUser?.name || (activePersona === 'ADMIN' ? 'System Administrator' : 'Operations Lead')}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-stone-900 text-white shrink-0 ml-1">
+                  {currentUser?.role || (activePersona === 'ADMIN' ? 'ADMIN' : 'INTERNAL')}
+                </span>
+              </div>
+              <div className="text-[10px] text-stone-500 truncate mt-0.5">
+                {currentUser?.email || (activePersona === 'ADMIN' ? 'admin@brightloop.com' : 'staff@brightloop.com')}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] text-stone-500">
+              <span>PostgreSQL 16</span>
               <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block animate-pulse" />
                 Live Node
               </span>
-            </div>
-            <div className="text-[10px] text-stone-500">
-              Brightloop Enterprise v1.0.0
             </div>
           </div>
         </aside>
@@ -514,6 +587,16 @@ export default function HomePage() {
                   <ExternalLink className="w-3.5 h-3.5" /> Open Deep Analytics Tab
                 </Link>
               )}
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold border-2 border-stone-900/15 transition-all cursor-pointer"
+                title="Switch User / Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5 text-stone-500" />
+                <span>Sign Out</span>
+              </button>
             </div>
           </header>
 
