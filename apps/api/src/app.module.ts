@@ -14,9 +14,10 @@ import { PortalModule } from './modules/portal/portal.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { DiscountsModule } from './modules/discounts/discounts.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), ScheduleModule.forRoot(), AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), ScheduleModule.forRoot(), AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
   providers: [PrismaService],
   exports: [PrismaService],
 })
