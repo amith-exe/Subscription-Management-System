@@ -2,7 +2,7 @@
 
 ## API documentation
 
-When the API is running, Swagger UI is available at `http://localhost:3001/docs` and the OpenAPI JSON document at `http://localhost:3001/docs-json`. The documentation includes the currently implemented invoice and discount endpoints. The API port can be changed with `API_PORT`.
+When the API is running in development, Swagger UI is available at `http://localhost:3001/api/docs` and the OpenAPI JSON document at `http://localhost:3001/api/docs-json`. Swagger documents the payment recording, payment history, invoice payment history, and Razorpay checkout endpoints. The API port can be changed with `API_PORT`.
 
 A modular-monolith subscription and billing platform built with NestJS, Prisma, PostgreSQL, Redis/BullMQ, and Next.js.
 

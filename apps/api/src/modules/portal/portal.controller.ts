@@ -32,7 +32,7 @@ export class PortalController {
       discountTotal: invoice.discountTotal,
       taxTotal: invoice.taxTotal,
       total: invoice.total,
-      amountPaid: invoice.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0)),
+      amountPaid: invoice.amountPaid,
       lines: invoice.lines.map((line) => ({
         id: line.id,
         description: line.description,

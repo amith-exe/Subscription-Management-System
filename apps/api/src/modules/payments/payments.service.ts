@@ -7,12 +7,21 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InvoiceStatus, PaymentAttemptStatus, Prisma } from '@prisma/client';
+import { InvoiceStatus, PaymentAttemptStatus, PaymentMethod, Prisma } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { canTransition, invoiceTransitions } from '../../common/state/transitions';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedUser } from '../auth/auth.types';
-import { VerifyRazorpayPaymentDto } from './payments.dto';
+import { CreatePaymentDto, ListPaymentsQueryDto, VerifyRazorpayPaymentDto } from './payments.dto';
+
+export type PaymentFilters = {
+  page?: number;
+  pageSize?: number;
+  method?: PaymentMethod;
+  invoiceId?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+};
 
 type RazorpayOrder = { id: string; amount: number; currency: string; status: string };
 type RazorpayPayment = {
@@ -28,21 +37,104 @@ type RazorpayPayment = {
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
+  async create(input: CreatePaymentDto) {
+    const amount = new Prisma.Decimal(input.amount);
+    if (!amount.isFinite() || amount.lte(0)) throw new BadRequestException('Payment amount must be greater than zero');
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Invoice" WHERE "id" = ${input.invoiceId} FOR UPDATE`;
+      const invoice = await tx.invoice.findUnique({ where: { id: input.invoiceId } });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+      if (invoice.status === InvoiceStatus.DRAFT || invoice.status === InvoiceStatus.CANCELLED) {
+        throw new BadRequestException(`Cannot record payment for a ${invoice.status.toLowerCase()} invoice`);
+      }
+
+      const outstanding = invoice.total.minus(invoice.amountPaid);
+      if (amount.gt(outstanding)) throw new BadRequestException('Payment amount exceeds the outstanding invoice balance');
+      if (outstanding.lte(0)) throw new BadRequestException('Invoice has no outstanding balance');
+
+      const amountPaid = invoice.amountPaid.plus(amount);
+      const settled = amountPaid.gte(invoice.total);
+      if (settled && !canTransition(invoiceTransitions, invoice.status, InvoiceStatus.PAID)) {
+        throw new BadRequestException(`Cannot mark invoice ${invoice.status} as paid`);
+      }
+
+      const payment = await tx.payment.create({
+        data: {
+          invoiceId: invoice.id,
+          method: input.method,
+          amount,
+          paidAt: new Date(input.date),
+          note: input.note,
+        },
+      });
+      const updatedInvoice = await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { amountPaid, ...(settled && { status: InvoiceStatus.PAID }) },
+      });
+      return {
+        ...payment,
+        invoice: {
+          ...updatedInvoice,
+          outstandingAmount: Prisma.Decimal.max(updatedInvoice.total.minus(updatedInvoice.amountPaid), 0),
+        },
+      };
+    });
+  }
+
+  async list(filters: PaymentFilters = {}) {
+    const page = Math.max(1, Math.floor(filters.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Math.floor(filters.pageSize ?? 20)));
+    const where: Prisma.PaymentWhereInput = {
+      ...(filters.invoiceId && { invoiceId: filters.invoiceId }),
+      ...(filters.method && { method: filters.method }),
+      ...((filters.dateFrom || filters.dateTo) && { paidAt: {
+        ...(filters.dateFrom && { gte: filters.dateFrom }),
+        ...(filters.dateTo && { lte: filters.dateTo }),
+      } }),
+    };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.payment.findMany({ where, include: { invoice: true }, orderBy: { paidAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+      this.prisma.payment.count({ where }),
+    ]);
+    return {
+      data: data.map((payment) => ({
+        ...payment,
+        invoice: {
+          ...payment.invoice,
+          outstandingAmount: Prisma.Decimal.max(payment.invoice.total.minus(payment.invoice.amountPaid), 0),
+        },
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async forInvoice(invoiceId: string, query: ListPaymentsQueryDto) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId }, select: { id: true } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return this.list({
+      ...query,
+      invoiceId,
+      dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
+      dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
+    });
+  }
+
   async createOrder(user: AuthenticatedUser, invoiceId: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
-      include: { payments: true, customer: { include: { user: true } } },
+      include: { customer: { include: { user: true } } },
     });
     if (!invoice || !user.customerId || invoice.customerId !== user.customerId) {
       throw new NotFoundException('Invoice not found');
     }
-    if (![InvoiceStatus.CONFIRMED, InvoiceStatus.OVERDUE].includes(invoice.status)) {
+    if (invoice.status !== InvoiceStatus.CONFIRMED && invoice.status !== InvoiceStatus.OVERDUE) {
       throw new BadRequestException('Only confirmed, unpaid invoices can be paid online');
     }
 
-    const outstanding = invoice.total.minus(
-      invoice.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0)),
-    );
+    const outstanding = invoice.total.minus(invoice.amountPaid);
     if (outstanding.lte(0)) throw new BadRequestException('Invoice has no outstanding balance');
 
     const existing = await this.prisma.paymentAttempt.findFirst({
@@ -121,7 +213,7 @@ export class PaymentsService {
   private async recordCapturedPayment(orderId: string, payment: RazorpayPayment) {
     const attempt = await this.prisma.paymentAttempt.findUnique({
       where: { providerOrderId: orderId },
-      include: { invoice: { include: { payments: true } } },
+      include: { invoice: true },
     });
     if (!attempt) throw new NotFoundException('Payment order not found');
     if (payment.order_id !== attempt.providerOrderId || payment.amount !== this.toPaise(attempt.amount) || payment.currency !== attempt.currency || payment.status !== 'captured') {
@@ -132,11 +224,20 @@ export class PaymentsService {
       return this.prisma.invoice.findUnique({ where: { id: attempt.invoiceId }, include: { payments: true } });
     }
     if (attempt.status !== PaymentAttemptStatus.CREATED) throw new ConflictException('This payment order is no longer active');
-    if (![InvoiceStatus.CONFIRMED, InvoiceStatus.OVERDUE].includes(attempt.invoice.status)) {
+    if (attempt.invoice.status !== InvoiceStatus.CONFIRMED && attempt.invoice.status !== InvoiceStatus.OVERDUE) {
       throw new ConflictException('Invoice is no longer payable');
     }
 
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Invoice" WHERE "id" = ${attempt.invoiceId} FOR UPDATE`;
+      const invoice = await tx.invoice.findUnique({ where: { id: attempt.invoiceId } });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+      if (invoice.status !== InvoiceStatus.CONFIRMED && invoice.status !== InvoiceStatus.OVERDUE) {
+        throw new ConflictException('Invoice is no longer payable');
+      }
+      const outstanding = invoice.total.minus(invoice.amountPaid);
+      if (attempt.amount.gt(outstanding)) throw new ConflictException('Payment order exceeds the current outstanding invoice balance');
+
       const claimed = await tx.paymentAttempt.updateMany({
         where: { id: attempt.id, status: PaymentAttemptStatus.CREATED, paymentId: null },
         data: { status: PaymentAttemptStatus.PAID, paymentId: payment.id, method: payment.method ?? null },
@@ -152,18 +253,20 @@ export class PaymentsService {
       await tx.payment.create({
         data: {
           invoiceId: attempt.invoiceId,
-          method: 'OTHER',
+          method: PaymentMethod.OTHER,
           amount: attempt.amount,
           reference: payment.id,
           note: `Razorpay (${payment.method ?? 'online'})`,
         },
       });
-      const paid = attempt.invoice.payments.reduce((sum, item) => sum.plus(item.amount), new Prisma.Decimal(0)).plus(attempt.amount);
-      if (paid.gte(attempt.invoice.total) && canTransition(invoiceTransitions, attempt.invoice.status, InvoiceStatus.PAID)) {
-        await tx.invoice.updateMany({
-          where: { id: attempt.invoiceId, status: attempt.invoice.status },
-          data: { status: InvoiceStatus.PAID },
-        });
+      const amountPaid = invoice.amountPaid.plus(attempt.amount);
+      const settled = amountPaid.gte(invoice.total);
+      await tx.invoice.update({
+        where: { id: attempt.invoiceId },
+        data: { amountPaid, ...(settled && canTransition(invoiceTransitions, invoice.status, InvoiceStatus.PAID) && { status: InvoiceStatus.PAID }) },
+      });
+      if (settled && !canTransition(invoiceTransitions, invoice.status, InvoiceStatus.PAID)) {
+        throw new ConflictException(`Cannot mark invoice ${invoice.status} as paid`);
       }
       return tx.invoice.findUnique({ where: { id: attempt.invoiceId }, include: { payments: true } });
     });
