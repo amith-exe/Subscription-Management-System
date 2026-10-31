@@ -6,7 +6,9 @@ import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProductsModule } from './modules/products/products.module';
+import { TaxesModule } from './modules/taxes/taxes.module';
 import { PlansModule } from './modules/plans/plans.module';
+import { QuotationsModule } from './modules/quotations/quotations.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { BillingModule } from './modules/billing/billing.module';
@@ -24,7 +26,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, PlansModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true, cache: true, validationSchema: envValidationSchema }), ScheduleModule.forRoot(), MailModule, AuthModule, UsersModule, ProductsModule, TaxesModule, PlansModule, QuotationsModule, SubscriptionsModule, InvoicesModule, BillingModule, DiscountsModule, AnalyticsModule, PortalModule, PaymentsModule, NotificationsModule, AuditModule],
   providers: [PrismaService, JwtAuthGuard, MustChangePasswordGuard, RolesGuard],
   exports: [PrismaService],
 })
