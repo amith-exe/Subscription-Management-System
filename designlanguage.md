@@ -194,11 +194,3 @@ export const inputClass =
 
 ---
 
-## 7. Team Division of Modules (4 Developers)
-
-| Developer Role | Primary Routes | Key Swiss Neo-Bento Components Used |
-| :--- | :--- | :--- |
-| **Dev 1: Admin & Catalog** | `/admin/products`, `/admin/plans`, `/admin/discounts` | Additive Variant Price Calculator Card (`Base + Odoo ₹560`), Plan Policy Toggle Switches (`allowEarlyClose`, `allowPause`), Audit JSON Diff Viewer |
-| **Dev 2: Internal Staff Ops** | `/staff/subscriptions`, `/staff/invoices` | 5-Step Lifecycle Stepper (`DRAFT → CLOSED`), Overdue Chase Filter Bar, Payment Ledger Modal (`UPI`, `CARD`, `BANK_TRANSFER`) |
-| **Dev 3: Customer Portal** | `/portal/subscriptions`, `/portal/invoices` | Top-Nav Isolated Shell, Policy-Gated "Cancel Early" Action Card, Official PDF Invoice Preview & Download Modal |
-| **Dev 4: Finance & Analytics** | `/finance/overview`, `/finance/aging` | `MonthlySnapshot` MRR Waterfall Progress Bars, 4-Cell Aging Bento Grid (`0–30`, `31–60`, `61–90`, `90+` days) |
