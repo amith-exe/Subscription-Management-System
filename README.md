@@ -1,5 +1,9 @@
 # Subscription Management System
 
+## API documentation
+
+When the API is running, Swagger UI is available at `http://localhost:3001/docs` and the OpenAPI JSON document at `http://localhost:3001/docs-json`. The documentation includes the currently implemented invoice and discount endpoints. The API port can be changed with `API_PORT`.
+
 A modular-monolith subscription and billing platform built with NestJS, Prisma, PostgreSQL, Redis/BullMQ, and Next.js.
 
 ## Workspace layout
