@@ -11,7 +11,7 @@ const templates: Record<string, { subject: string; html: string; text: string }>
   resetLink: { subject: 'Reset your Brightloop password', html: '<p>Use <a href="{{link}}">this secure link</a> within 15 minutes.</p>', text: 'Use this secure link within 15 minutes: {{link}}' },
   resetOtp: { subject: 'Your Brightloop password reset code', html: '<p>Your reset code is <strong>{{code}}</strong>.</p>', text: 'Your reset code is {{code}}.' },
   changed: { subject: 'Your Brightloop password changed', html: '<p>Your password was changed. If this was not you, contact support.</p>', text: 'Your password was changed. If this was not you, contact support.' },
-  invite: { subject: 'You have been invited to Brightloop', html: '<p>Your staff account is ready for {{email}}. Use the temporary password supplied by your administrator and change it after signing in.</p>', text: 'Your staff account is ready for {{email}}. Change your temporary password after signing in.' },
+  invite: { subject: 'You have been invited to Brightloop', html: '<p>Hello {{name}},</p><p>Your staff account is ready for {{email}}.</p><p>Temporary password: <strong>{{temporaryPassword}}</strong></p><p>Change it immediately after signing in.</p>', text: 'Hello {{name}}, your staff account is ready for {{email}}. Temporary password: {{temporaryPassword}}. Change it immediately after signing in.' },
   loginOtp: { subject: 'Your Brightloop sign-in code', html: '<p>Your sign-in code is <strong>{{code}}</strong>.</p>', text: 'Your sign-in code is {{code}}.' },
 };
 
