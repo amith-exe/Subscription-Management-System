@@ -8,14 +8,25 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['DM Sans', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
       colors: {
+        canvas: '#F4F3EF',
+        sidebar: '#EAE8E1',
         brand: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          500: '#16a34a',
-          600: '#15803d',
-          700: '#166534',
+          50: '#ECFDF5',
+          100: '#D1FAE5',
+          600: '#059669',
+          700: '#047857',
+          800: '#065F46',
         },
+      },
+      boxShadow: {
+        bento: '4px 4px 0px rgba(28, 25, 23, 0.06)',
+        'bento-lg': '8px 8px 0px rgba(28, 25, 23, 0.12)',
+        tactile: '2px 2px 0px rgba(28, 25, 23, 0.20)',
       },
     },
   },
@@ -23,4 +34,3 @@ const config: Config = {
 };
 
 export default config;
-
