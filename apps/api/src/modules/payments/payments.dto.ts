@@ -61,6 +61,15 @@ export class VerifyRazorpayPaymentDto {
   @ApiProperty() @IsString() @MinLength(32) razorpay_signature!: string;
 }
 
+export class PaymentInvoiceBalanceDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ example: 'INV-000017' }) number!: string;
+  @ApiProperty({ enum: InvoiceStatus }) status!: InvoiceStatus;
+  @ApiProperty({ type: Number }) total!: number;
+  @ApiProperty({ type: Number }) amountPaid!: number;
+  @ApiProperty({ type: Number }) outstandingAmount!: number;
+}
+
 export class PaymentResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) invoiceId!: string;
@@ -70,15 +79,6 @@ export class PaymentResponseDto {
   @ApiPropertyOptional({ nullable: true }) note?: string | null;
   @ApiPropertyOptional({ nullable: true }) reference?: string | null;
   @ApiPropertyOptional({ type: () => PaymentInvoiceBalanceDto }) invoice?: PaymentInvoiceBalanceDto;
-}
-
-export class PaymentInvoiceBalanceDto {
-  @ApiProperty({ format: 'uuid' }) id!: string;
-  @ApiProperty({ example: 'INV-000017' }) number!: string;
-  @ApiProperty({ enum: InvoiceStatus }) status!: InvoiceStatus;
-  @ApiProperty({ type: Number }) total!: number;
-  @ApiProperty({ type: Number }) amountPaid!: number;
-  @ApiProperty({ type: Number }) outstandingAmount!: number;
 }
 
 export class PaginatedPaymentsResponseDto {
