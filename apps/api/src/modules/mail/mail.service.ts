@@ -22,10 +22,11 @@ export class MailService {
 
   public constructor(private readonly config: ConfigService) {
     this.transporter = nodemailer.createTransport({
-      host: this.config.getOrThrow<string>('SMTP_HOST'),
-      port: this.config.getOrThrow<number>('SMTP_PORT'),
-      secure: this.config.getOrThrow<boolean>('SMTP_SECURE'),
-      auth: { user: this.config.getOrThrow<string>('SMTP_USER'), pass: this.config.getOrThrow<string>('SMTP_PASS') },
+      host: this.config.getOrThrow<string>('MAIL_HOST'),
+      port: this.config.getOrThrow<number>('MAIL_PORT'),
+      secure: false,
+      requireTLS: true,
+      auth: { user: this.config.getOrThrow<string>('MAIL_USER'), pass: this.config.getOrThrow<string>('MAIL_PASSWORD') },
     });
   }
 
@@ -33,16 +34,14 @@ export class MailService {
     const template = templates[templateName];
     if (!template) throw new Error(`Unknown mail template: ${templateName}`);
     const compile = (value: string): string => handlebars.compile(value)(data);
-    const fromName = this.config.getOrThrow<string>('MAIL_FROM_NAME');
-    const fromAddress = this.config.getOrThrow<string>('MAIL_FROM_ADDRESS');
     if (this.config.get<boolean>('QUEUE_ENABLED') === true) {
       this.logger.warn('QUEUE_ENABLED is true but no queue worker is configured; using direct SMTP fallback.');
     }
-    await this.transporter.sendMail({ from: `"${fromName}" <${fromAddress}>`, to, subject: compile(template.subject), html: compile(template.html), text: compile(template.text) });
+    await this.transporter.sendMail({ from: this.config.getOrThrow<string>('MAIL_FROM'), to, subject: compile(template.subject), html: compile(template.html), text: compile(template.text) });
   }
 
-  public async sendOtp(templateName: string, to: string, code: string, name: string): Promise<void> {
-    if (this.config.get<boolean>('LOG_OTP_IN_DEV') === true && this.config.get<string>('NODE_ENV') === 'development') this.logger.debug(`OTP generated for ${to}: ${code}`);
-    await this.send(templateName, to, { code, name });
-  }
+  public async sendOtp(templateName: string, to: string, code: string, name: string): Promise<void> { await this.send(templateName, to, { code, name }); }
+  public async sendLoginOtp(email: string, otp: string): Promise<void> { await this.send('loginOtp', email, { code: otp, name: email }); }
+  public async sendVerificationOtp(email: string, otp: string): Promise<void> { await this.send('verify', email, { code: otp, name: email }); }
+  public async sendPasswordResetLink(email: string, url: string): Promise<void> { await this.send('resetLink', email, { link: url, name: email }); }
 }
